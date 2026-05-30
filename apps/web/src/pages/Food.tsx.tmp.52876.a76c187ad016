@@ -1,0 +1,196 @@
+import { useEffect, useState } from 'react'
+import { format, addDays, subDays } from 'date-fns'
+import { useFoodStore } from '@/stores/foodStore'
+import type { FoodLog, MealType } from '@/types'
+
+const MEALS: { key: MealType; label: string; emoji: string }[] = [
+  { key: 'BREAKFAST', label: 'Breakfast', emoji: '🌅' },
+  { key: 'LUNCH', label: 'Lunch', emoji: '☀️' },
+  { key: 'DINNER', label: 'Dinner', emoji: '🌙' },
+  { key: 'SNACK', label: 'Snacks', emoji: '🍎' },
+]
+
+function MealSection({
+  meal,
+  logs,
+  onAdd,
+  onDelete,
+}: {
+  meal: { key: MealType; label: string; emoji: string }
+  logs: FoodLog[]
+  onAdd: (meal: MealType) => void
+  onDelete: (id: string) => void
+}) {
+  const mealLogs = logs.filter((l) => l.meal === meal.key)
+  const totalCals = mealLogs.reduce((sum, l) => {
+    const cals = l.foodItem ? l.foodItem.calories * l.servingQty
+      : (l.recipe?.nutrition?.perServingCalories ?? 0) * l.servingQty
+    return sum + cals
+  }, 0)
+
+  return (
+    <div className="bg-surface rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span>{meal.emoji}</span>
+          <span className="font-medium">{meal.label}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {mealLogs.length > 0 && (
+            <span className="text-sm text-muted">{Math.round(totalCals)} kcal</span>
+          )}
+          <button
+            onClick={() => onAdd(meal.key)}
+            className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-lg leading-none"
+          >
+            +
+          </button>
+        </div>
+      </div>
+      {mealLogs.length > 0 && (
+        <div className="border-t border-border">
+          {mealLogs.map((log) => {
+            const name = log.foodItem?.name ?? log.recipe?.name ?? '—'
+            const cals = log.foodItem
+              ? Math.round(log.foodItem.calories * log.servingQty)
+              : Math.round((log.recipe?.nutrition?.perServingCalories ?? 0) * log.servingQty)
+            return (
+              <div key={log.id} className="flex items-center justify-between px-4 py-2.5">
+                <div>
+                  <p className="text-sm font-medium">{name}</p>
+                  <p className="text-xs text-muted">
+                    {log.servingQty} {log.foodItem ? `× ${log.foodItem.servingSize}${log.foodItem.servingUnit}` : 'serving'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm">{cals} kcal</span>
+                  <button
+                    onClick={() => onDelete(log.id)}
+                    className="text-muted hover:text-danger text-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function Food() {
+  const { logs, date, setDate, fetchLogs, deleteLog } = useFoodStore()
+  const [showAddModal, setShowAddModal] = useState<MealType | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const { searchFoods, addLog } = useFoodStore()
+
+  useEffect(() => {
+    fetchLogs()
+  }, [])
+
+  const totalCals = logs.reduce((sum, l) => {
+    const cals = l.foodItem ? l.foodItem.calories * l.servingQty
+      : (l.recipe?.nutrition?.perServingCalories ?? 0) * l.servingQty
+    return sum + cals
+  }, 0)
+
+  const handleSearch = async (q: string) => {
+    setSearchQuery(q)
+    if (q.length > 1) {
+      const results = await searchFoods(q)
+      setSearchResults(results)
+    } else {
+      setSearchResults([])
+    }
+  }
+
+  const handleAddFood = async (foodItem: any) => {
+    if (!showAddModal) return
+    await addLog({ meal: showAddModal, foodItemId: foodItem.id, servingQty: 1 })
+    setShowAddModal(null)
+    setSearchQuery('')
+    setSearchResults([])
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="bg-surface border-b border-border px-4 py-3 safe-top">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setDate(subDays(date, 1))}
+            className="w-8 h-8 flex items-center justify-center text-muted hover:text-white"
+          >
+            ‹
+          </button>
+          <div className="text-center">
+            <p className="font-semibold">{format(date, 'EEEE')}</p>
+            <p className="text-xs text-muted">{format(date, 'MMM d, yyyy')}</p>
+          </div>
+          <button
+            onClick={() => setDate(addDays(date, 1))}
+            className="w-8 h-8 flex items-center justify-center text-muted hover:text-white"
+          >
+            ›
+          </button>
+        </div>
+        <div className="mt-2 text-center">
+          <span className="text-sm text-muted">{Math.round(totalCals)} kcal logged</span>
+        </div>
+      </div>
+
+      {/* Meal sections */}
+      <div className="flex-1 overflow-y-auto p-4 pb-nav space-y-3">
+        {MEALS.map((meal) => (
+          <MealSection
+            key={meal.key}
+            meal={meal}
+            logs={logs}
+            onAdd={setShowAddModal}
+            onDelete={deleteLog}
+          />
+        ))}
+      </div>
+
+      {/* Add food modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm" onClick={(e) => {
+          if (e.target === e.currentTarget) setShowAddModal(null)
+        }}>
+          <div className="flex-1 flex flex-col max-h-full">
+            <div className="p-4 border-b border-border flex items-center gap-3 safe-top">
+              <input
+                autoFocus
+                className="flex-1 bg-surfaceHigh rounded-xl px-4 py-2.5 text-sm outline-none placeholder:text-muted"
+                placeholder="Search foods..."
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+              />
+              <button onClick={() => setShowAddModal(null)} className="text-muted">Cancel</button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {searchResults.map((item) => (
+                <button
+                  key={item.id}
+                  className="w-full px-4 py-3 border-b border-border text-left hover:bg-surfaceHigh"
+                  onClick={() => handleAddFood(item)}
+                >
+                  <p className="font-medium text-sm">{item.name}</p>
+                  <p className="text-xs text-muted">
+                    {item.brand ? `${item.brand} · ` : ''}{item.calories} kcal per {item.servingSize}{item.servingUnit}
+                  </p>
+                </button>
+              ))}
+              {searchQuery.length > 1 && searchResults.length === 0 && (
+                <p className="text-center text-muted text-sm py-8">No results found</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

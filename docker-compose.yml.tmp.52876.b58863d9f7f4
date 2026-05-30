@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fitself
+      POSTGRES_USER: fitself
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitself"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://fitself:${DB_PASSWORD}@db:5432/fitself
+      JWT_SECRET: ${JWT_SECRET}
+      OPENFOODFACTS_BASE_URL: https://world.openfoodfacts.org
+      USDA_API_KEY: ${USDA_API_KEY}
+      EXERCISEDB_API_KEY: ${EXERCISEDB_API_KEY}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      INVITE_TOKEN: ${INVITE_TOKEN:-}
+      PORT: 3001
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  web:
+    build: ./apps/web
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,322 @@
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { api } from '@/lib/api'
+import type { Exercise } from '@/types'
+
+const MUSCLE_GROUPS = [
+  'CHEST', 'BACK', 'SHOULDERS', 'UPPER ARMS', 'LOWER ARMS',
+  'UPPER LEGS', 'LOWER LEGS', 'WAIST', 'CARDIO', 'NECK',
+]
+
+const EQUIPMENT_LIST = [
+  'BARBELL', 'DUMBBELL', 'BODYWEIGHT', 'CABLE', 'MACHINE',
+  'KETTLEBELL', 'BAND', 'EZ BARBELL',
+]
+
+const CATEGORIES = [
+  'STRENGTH', 'CARDIO', 'STRETCHING', 'PLYOMETRICS',
+  'POWERLIFTING', 'OLYMPIC WEIGHTLIFTING',
+]
+
+function cap(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+}
+
+// ─── Custom exercise creation modal ──────────────────────────
+
+interface CreateModalProps {
+  onClose: () => void
+  onCreate: (ex: Exercise) => void
+}
+
+function CreateExerciseModal({ onClose, onCreate }: CreateModalProps) {
+  const [name, setName] = useState('')
+  const [muscleGroup, setMuscleGroup] = useState('')
+  const [equipment, setEquipment] = useState('')
+  const [category, setCategory] = useState('STRENGTH')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async () => {
+    if (!name.trim()) { setError('Name is required'); return }
+    setSaving(true)
+    setError('')
+    try {
+      const { data } = await api.post('/exercises', {
+        name: name.trim(),
+        muscleGroup: muscleGroup || undefined,
+        equipment: equipment || undefined,
+        category: category || undefined,
+        description: description.trim() || undefined,
+      })
+      onCreate(data)
+    } catch {
+      setError('Failed to create exercise')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputCls = 'w-full bg-surfaceHigh rounded-xl px-4 py-3 text-sm placeholder-muted outline-none focus:ring-1 focus:ring-primary'
+  const selectCls = 'w-full bg-surfaceHigh rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-primary'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+      <div
+        className="w-full bg-background rounded-t-3xl p-4 pb-safe max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">New Exercise</h2>
+          <button onClick={onClose} className="text-muted text-xl leading-none w-8 h-8 flex items-center justify-center">✕</button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted mb-1 block">Name *</label>
+            <input
+              className={inputCls}
+              placeholder="e.g. Romanian Deadlift"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted mb-1 block">Muscle Group</label>
+              <select className={selectCls} value={muscleGroup} onChange={(e) => setMuscleGroup(e.target.value)}>
+                <option value="">None</option>
+                {MUSCLE_GROUPS.map((m) => (
+                  <option key={m} value={m}>{cap(m)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted mb-1 block">Equipment</label>
+              <select className={selectCls} value={equipment} onChange={(e) => setEquipment(e.target.value)}>
+                <option value="">None</option>
+                {EQUIPMENT_LIST.map((eq) => (
+                  <option key={eq} value={eq}>{cap(eq)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted mb-1 block">Category</label>
+            <select className={selectCls} value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>{cap(c)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted mb-1 block">Notes / Description</label>
+            <textarea
+              className={`${inputCls} h-24 resize-none`}
+              placeholder="Optional cues or description..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+
+          {error && <p className="text-danger text-sm">{error}</p>}
+
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !name.trim()}
+            className="w-full bg-primary text-white font-semibold py-3 rounded-2xl disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Create Exercise'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Exercise row card ────────────────────────────────────────
+
+function ExerciseRow({
+  exercise,
+  onSelect,
+  onClick,
+}: {
+  exercise: Exercise
+  onSelect?: (ex: Exercise) => void
+  onClick: () => void
+}) {
+  return (
+    <div className="bg-surface rounded-2xl p-3 flex gap-3 items-center">
+      {exercise.imageUrl ? (
+        <img
+          src={exercise.imageUrl}
+          alt=""
+          className="w-14 h-14 rounded-xl object-cover flex-shrink-0 bg-surfaceHigh"
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-14 h-14 rounded-xl bg-surfaceHigh flex items-center justify-center flex-shrink-0 text-xl">
+          💪
+        </div>
+      )}
+
+      <button className="flex-1 min-w-0 text-left" onClick={onClick}>
+        <p className="font-semibold text-sm leading-tight truncate">{exercise.name}</p>
+        {exercise.muscleGroup && (
+          <p className="text-xs text-muted mt-0.5 capitalize">{exercise.muscleGroup.toLowerCase()}</p>
+        )}
+        <div className="flex gap-1 mt-1 flex-wrap">
+          {exercise.equipment && (
+            <span className="text-xs bg-surfaceHigh text-muted px-2 py-0.5 rounded-full capitalize">
+              {exercise.equipment.toLowerCase()}
+            </span>
+          )}
+          {exercise.category && (
+            <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full capitalize">
+              {exercise.category.toLowerCase()}
+            </span>
+          )}
+          {exercise.isCustom && (
+            <span className="text-xs bg-warning/20 text-warning px-2 py-0.5 rounded-full">custom</span>
+          )}
+        </div>
+      </button>
+
+      {onSelect ? (
+        <button
+          onClick={() => onSelect(exercise)}
+          className="flex-shrink-0 bg-primary text-white text-xs font-semibold px-3 py-1.5 rounded-xl"
+        >
+          Add
+        </button>
+      ) : (
+        <button onClick={onClick} className="text-muted flex-shrink-0 px-1">›</button>
+      )}
+    </div>
+  )
+}
+
+// ─── Main ExercisePicker ──────────────────────────────────────
+
+interface ExercisePickerProps {
+  /** If provided, each exercise shows an "Add" button. If omitted, tapping navigates to detail. */
+  onSelect?: (exercise: Exercise) => void
+}
+
+export function ExercisePicker({ onSelect }: ExercisePickerProps) {
+  const navigate = useNavigate()
+  const [query, setQuery] = useState('')
+  const [muscle, setMuscle] = useState('')
+  const [exercises, setExercises] = useState<Exercise[]>([])
+  const [loading, setLoading] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const fetchExercises = (q: string, m: string) => {
+    setLoading(true)
+    const params: Record<string, string> = {}
+    if (q) params.q = q
+    if (m) params.muscle = m
+    api.get('/exercises', { params })
+      .then(({ data }) => setExercises(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => fetchExercises(query, muscle), 300)
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+  }, [query, muscle])
+
+  const handleCreate = (ex: Exercise) => {
+    setShowCreate(false)
+    setExercises((prev) => [ex, ...prev])
+  }
+
+  const handleRowClick = (ex: Exercise) => {
+    navigate(`/exercises/${ex.id}`)
+  }
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0">
+      {/* Search */}
+      <div className="px-4 pt-3 pb-2 space-y-2">
+        <div className="bg-surfaceHigh rounded-xl px-3 py-2.5 flex items-center gap-2">
+          <span className="text-muted text-sm">🔍</span>
+          <input
+            className="flex-1 bg-transparent text-sm outline-none placeholder-muted"
+            placeholder="Search exercises…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button onClick={() => setQuery('')} className="text-muted text-sm">✕</button>
+          )}
+        </div>
+
+        {/* Muscle filter chips */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+          <button
+            onClick={() => setMuscle('')}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              muscle === '' ? 'bg-primary text-white' : 'bg-surfaceHigh text-muted'
+            }`}
+          >
+            All
+          </button>
+          {MUSCLE_GROUPS.map((m) => (
+            <button
+              key={m}
+              onClick={() => setMuscle(muscle === m ? '' : m)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-colors ${
+                muscle === m ? 'bg-primary text-white' : 'bg-surfaceHigh text-muted'
+              }`}
+            >
+              {cap(m)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-24">
+        {loading && exercises.length === 0 && (
+          <p className="text-center text-muted text-sm py-12">Loading…</p>
+        )}
+        {!loading && exercises.length === 0 && (
+          <div className="text-center text-muted py-12">
+            <p className="text-sm mb-1">No exercises found</p>
+            <p className="text-xs">Try a different search, or create a custom exercise below</p>
+          </div>
+        )}
+        {exercises.map((ex) => (
+          <ExerciseRow
+            key={ex.id}
+            exercise={ex}
+            onSelect={onSelect}
+            onClick={() => handleRowClick(ex)}
+          />
+        ))}
+      </div>
+
+      {/* FAB — create custom exercise */}
+      <button
+        onClick={() => setShowCreate(true)}
+        className="fixed bottom-20 right-4 w-14 h-14 bg-primary text-white rounded-full text-2xl shadow-lg flex items-center justify-center z-10"
+        aria-label="Create custom exercise"
+      >
+        +
+      </button>
+
+      {showCreate && (
+        <CreateExerciseModal onClose={() => setShowCreate(false)} onCreate={handleCreate} />
+      )}
+    </div>
+  )
+}

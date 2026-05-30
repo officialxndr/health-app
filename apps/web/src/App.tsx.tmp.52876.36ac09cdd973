@@ -1,0 +1,66 @@
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useAuthStore } from '@/stores/authStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { api } from '@/lib/api'
+import { Layout } from '@/components/Layout'
+import { Dashboard } from '@/pages/Dashboard'
+import { Food } from '@/pages/Food'
+import { Workout } from '@/pages/Workout'
+import { Health } from '@/pages/Health'
+import { Measurements } from '@/pages/Measurements'
+import { Settings } from '@/pages/Settings'
+import { Login } from '@/pages/Login'
+import { Register } from '@/pages/Register'
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  const location = useLocation()
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />
+  return <>{children}</>
+}
+
+function AppInit() {
+  const { user, setUser, setAccessToken } = useAuthStore()
+  const { setUnitSystem } = useSettingsStore()
+
+  useEffect(() => {
+    if (!user) return
+    // Refresh user data and sync unit preference on mount
+    api.get('/auth/me')
+      .then(({ data }) => {
+        setUser(data)
+        if (data.profile?.unitSystem) setUnitSystem(data.profile.unitSystem)
+      })
+      .catch(() => {})
+  }, [])
+
+  return null
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppInit />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route
+          element={
+            <RequireAuth>
+              <Layout />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="food" element={<Food />} />
+          <Route path="workout" element={<Workout />} />
+          <Route path="health" element={<Health />} />
+          <Route path="health/measurements" element={<Measurements />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}

@@ -1,0 +1,252 @@
+import { FastifyPluginAsync } from 'fastify'
+import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
+import { z } from 'zod'
+import { prisma } from '../lib/prisma.js'
+
+const RegisterSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  name: z.string().optional(),
+  inviteToken: z.string().optional(),
+})
+
+const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+})
+
+const ProfileUpdateSchema = z.object({
+  name: z.string().optional(),
+  birthDate: z.string().datetime({ offset: true }).optional().nullable(),
+  heightCm: z.number().positive().optional().nullable(),
+  goalWeightKg: z.number().positive().optional().nullable(),
+  goalBodyFat: z.number().min(1).max(60).optional().nullable(),
+  goalDate: z.string().datetime({ offset: true }).optional().nullable(),
+  activityLevel: z.enum(['SEDENTARY', 'LIGHT', 'MODERATE', 'ACTIVE', 'VERY_ACTIVE']).optional(),
+  sex: z.enum(['MALE', 'FEMALE', 'OTHER']).optional().nullable(),
+  goalType: z.enum(['LOSE', 'GAIN', 'MAINTAIN']).optional(),
+  unitSystem: z.enum(['METRIC', 'IMPERIAL']).optional(),
+  calorieGoal: z.number().int().positive().optional().nullable(),
+  proteinTarget: z.number().int().positive().optional().nullable(),
+  carbsTarget: z.number().int().positive().optional().nullable(),
+  fatTarget: z.number().int().positive().optional().nullable(),
+  macroTargetMode: z.enum(['GRAMS', 'PERCENT']).optional(),
+  countActiveCalories: z.boolean().optional(),
+})
+
+const REFRESH_TOKEN_EXPIRY_DAYS = 7
+const ACCESS_TOKEN_EXPIRY = '15m'
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+const authRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.post('/register', async (request, reply) => {
+    const allowRegistration = process.env.ALLOW_REGISTRATION !== 'false'
+    const inviteToken = process.env.INVITE_TOKEN
+
+    const body = RegisterSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({ error: 'Invalid input', details: body.error.issues })
+    }
+
+    if (!allowRegistration) {
+      if (!inviteToken || body.data.inviteToken !== inviteToken) {
+        return reply.status(403).send({ error: 'Registration requires an invite token' })
+      }
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email: body.data.email } })
+    if (existing) {
+      return reply.status(409).send({ error: 'Email already registered' })
+    }
+
+    const passwordHash = await bcrypt.hash(body.data.password, 12)
+    const user = await prisma.user.create({
+      data: {
+        email: body.data.email,
+        passwordHash,
+        name: body.data.name,
+        profile: { create: {} },
+      },
+      select: { id: true, email: true, name: true },
+    })
+
+    const accessToken = fastify.jwt.sign(
+      { userId: user.id, email: user.email },
+      { expiresIn: ACCESS_TOKEN_EXPIRY }
+    )
+    const rawRefresh = crypto.randomBytes(40).toString('hex')
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(rawRefresh),
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 86400 * 1000),
+      },
+    })
+
+    reply
+      .setCookie('refresh_token', rawRefresh, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth',
+        maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 86400,
+      })
+      .send({ user, accessToken })
+  })
+
+  fastify.post('/login', async (request, reply) => {
+    const body = LoginSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({ error: 'Invalid input' })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: body.data.email },
+      include: { profile: true },
+    })
+    if (!user) {
+      return reply.status(401).send({ error: 'Invalid credentials' })
+    }
+
+    const valid = await bcrypt.compare(body.data.password, user.passwordHash)
+    if (!valid) {
+      return reply.status(401).send({ error: 'Invalid credentials' })
+    }
+
+    const accessToken = fastify.jwt.sign(
+      { userId: user.id, email: user.email },
+      { expiresIn: ACCESS_TOKEN_EXPIRY }
+    )
+    const rawRefresh = crypto.randomBytes(40).toString('hex')
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(rawRefresh),
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 86400 * 1000),
+      },
+    })
+
+    const { passwordHash: _, ...safeUser } = user
+    reply
+      .setCookie('refresh_token', rawRefresh, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth',
+        maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 86400,
+      })
+      .send({ user: safeUser, accessToken })
+  })
+
+  fastify.post('/refresh', async (request, reply) => {
+    const token = request.cookies?.refresh_token
+    if (!token) return reply.status(401).send({ error: 'No refresh token' })
+
+    const stored = await prisma.refreshToken.findUnique({
+      where: { tokenHash: hashToken(token) },
+      include: { user: true },
+    })
+
+    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+      return reply.status(401).send({ error: 'Invalid or expired refresh token' })
+    }
+
+    // Rotate: revoke old, issue new
+    await prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: new Date() },
+    })
+
+    const newRaw = crypto.randomBytes(40).toString('hex')
+    await prisma.refreshToken.create({
+      data: {
+        userId: stored.userId,
+        tokenHash: hashToken(newRaw),
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 86400 * 1000),
+      },
+    })
+
+    const accessToken = fastify.jwt.sign(
+      { userId: stored.userId, email: stored.user.email },
+      { expiresIn: ACCESS_TOKEN_EXPIRY }
+    )
+
+    reply
+      .setCookie('refresh_token', newRaw, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth',
+        maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 86400,
+      })
+      .send({ accessToken })
+  })
+
+  fastify.post('/logout', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const token = request.cookies?.refresh_token
+    if (token) {
+      await prisma.refreshToken.updateMany({
+        where: { tokenHash: hashToken(token), revokedAt: null },
+        data: { revokedAt: new Date() },
+      })
+    }
+    reply.clearCookie('refresh_token', { path: '/api/auth' }).send({ ok: true })
+  })
+
+  fastify.get('/me', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const user = await prisma.user.findUnique({
+      where: { id: request.user.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+        profile: true,
+      },
+    })
+    return user
+  })
+
+  fastify.put('/profile', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const body = ProfileUpdateSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({ error: 'Invalid input', details: body.error.issues })
+    }
+
+    const { name, ...profileFields } = body.data
+
+    const updates: Promise<any>[] = []
+
+    if (name !== undefined) {
+      updates.push(prisma.user.update({ where: { id: request.user.userId }, data: { name } }))
+    }
+
+    if (Object.keys(profileFields).length > 0) {
+      const parsedProfile: Record<string, any> = { ...profileFields }
+      if (parsedProfile.birthDate) parsedProfile.birthDate = new Date(parsedProfile.birthDate)
+      if (parsedProfile.goalDate) parsedProfile.goalDate = new Date(parsedProfile.goalDate)
+
+      updates.push(
+        prisma.userProfile.upsert({
+          where: { userId: request.user.userId },
+          update: parsedProfile,
+          create: { userId: request.user.userId, ...parsedProfile },
+        })
+      )
+    }
+
+    await Promise.all(updates)
+
+    const updated = await prisma.user.findUnique({
+      where: { id: request.user.userId },
+      select: { id: true, email: true, name: true, profile: true },
+    })
+    return updated
+  })
+}
+
+export default authRoutes

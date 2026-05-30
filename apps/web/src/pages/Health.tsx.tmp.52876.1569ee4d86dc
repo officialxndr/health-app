@@ -1,0 +1,178 @@
+import { useEffect, useState } from 'react'
+import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/authStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { formatWeight, toKg } from '@/lib/units'
+import type { HealthStats } from '@/types'
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Scatter, ScatterChart,
+} from 'recharts'
+import { format } from 'date-fns'
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-surface rounded-2xl p-4">
+      <p className="text-xs text-muted mb-1">{label}</p>
+      <p className="text-xl font-bold">{value}</p>
+      {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
+export function Health() {
+  const user = useAuthStore((s) => s.user)
+  const { unitSystem } = useSettingsStore()
+  const [stats, setStats] = useState<HealthStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [newWeight, setNewWeight] = useState('')
+  const [logging, setLogging] = useState(false)
+
+  const fetchStats = () => {
+    setLoading(true)
+    api.get('/health/stats')
+      .then(({ data }) => setStats(data))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchStats() }, [])
+
+  const handleLogWeight = async () => {
+    if (!newWeight) return
+    setLogging(true)
+    try {
+      const weightKg = toKg(parseFloat(newWeight), unitSystem)
+      await api.post('/health/weight', {
+        date: new Date().toISOString().split('T')[0],
+        weightKg,
+      })
+      setNewWeight('')
+      fetchStats()
+    } finally {
+      setLogging(false)
+    }
+  }
+
+  const chartData = stats?.entries.map((e) => ({
+    date: format(new Date(e.date), 'MMM d'),
+    weight: unitSystem === 'IMPERIAL' ? +(e.weightKg * 2.20462).toFixed(1) : +e.weightKg.toFixed(1),
+  })) ?? []
+
+  const profile = user?.profile
+  const goalWeight = profile?.goalWeightKg
+    ? unitSystem === 'IMPERIAL'
+      ? +(profile.goalWeightKg * 2.20462).toFixed(1)
+      : +profile.goalWeightKg.toFixed(1)
+    : null
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="bg-surface border-b border-border px-4 py-3 safe-top">
+        <h1 className="text-xl font-bold">Health</h1>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 pb-nav space-y-4">
+        {/* Log weight */}
+        <div className="bg-surface rounded-2xl p-4">
+          <p className="text-sm font-medium mb-3">Log Today's Weight</p>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              step="0.1"
+              placeholder={unitSystem === 'IMPERIAL' ? 'lbs' : 'kg'}
+              value={newWeight}
+              onChange={(e) => setNewWeight(e.target.value)}
+              className="flex-1 bg-surfaceHigh rounded-xl px-4 py-2.5 text-sm outline-none"
+            />
+            <button
+              onClick={handleLogWeight}
+              disabled={!newWeight || logging}
+              className="bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+            >
+              Log
+            </button>
+          </div>
+        </div>
+
+        {/* Stats grid */}
+        {stats && (
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              label="Current Weight"
+              value={stats.current ? formatWeight(stats.current.weightKg, unitSystem) : '—'}
+            />
+            <StatCard
+              label="7-Day Change"
+              value={stats.weeklyChange !== null
+                ? `${stats.weeklyChange > 0 ? '+' : ''}${formatWeight(Math.abs(stats.weeklyChange), unitSystem)}`
+                : '—'}
+            />
+            <StatCard
+              label="Avg Calories (7d)"
+              value={stats.calorieAvg7 ? `${stats.calorieAvg7} kcal` : '—'}
+            />
+            <StatCard
+              label="Goal ETA"
+              value={stats.goalEta ?? '—'}
+              sub={stats.onTrack ? 'On track ✓' : undefined}
+            />
+          </div>
+        )}
+
+        {/* Pace adjustment */}
+        {stats?.dailyCalorieDelta !== null && stats?.dailyCalorieDelta !== undefined && (
+          <div className={`rounded-2xl p-4 ${stats.onTrack ? 'bg-success/10 border border-success/30' : 'bg-surface'}`}>
+            <p className="text-sm font-medium mb-1">
+              {stats.onTrack ? '✓ On Pace' : 'Pace Adjustment'}
+            </p>
+            <p className="text-sm text-muted">
+              {stats.onTrack
+                ? 'Keep it up — your current rate will hit your goal on time.'
+                : stats.dailyCalorieDelta > 0
+                  ? `Eat ~${Math.round(Math.abs(stats.dailyCalorieDelta))} more cal/day to stay on pace.`
+                  : `Reduce ~${Math.round(Math.abs(stats.dailyCalorieDelta))} cal/day to stay on pace.`}
+            </p>
+          </div>
+        )}
+
+        {/* Weight trend chart */}
+        {chartData.length > 1 && (
+          <div className="bg-surface rounded-2xl p-4">
+            <p className="text-sm font-medium mb-3">Weight Trend</p>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={chartData}>
+                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} />
+                <YAxis
+                  domain={['auto', 'auto']}
+                  tick={{ fill: '#6b7280', fontSize: 11 }}
+                  tickLine={false}
+                  width={40}
+                />
+                <Tooltip
+                  contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8 }}
+                  labelStyle={{ color: '#6b7280' }}
+                />
+                {goalWeight && (
+                  <ReferenceLine y={goalWeight} stroke="#6366f1" strokeDasharray="4 2" />
+                )}
+                <Line
+                  type="monotone"
+                  dataKey="weight"
+                  stroke="#6366f1"
+                  strokeWidth={2}
+                  dot={{ fill: '#6366f1', r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {loading && !stats && (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

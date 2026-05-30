@@ -1,0 +1,105 @@
+import { formatDistanceToNow, format } from 'date-fns'
+import type { WorkoutSession } from '@/types'
+
+interface SessionDetailProps {
+  session: WorkoutSession
+  onClose: () => void
+}
+
+export function SessionDetail({ session, onClose }: SessionDetailProps) {
+  const duration = session.finishedAt
+    ? Math.round(
+        (new Date(session.finishedAt).getTime() - new Date(session.startedAt).getTime()) / 60000
+      )
+    : null
+
+  const prs = session.exercises.flatMap(e => e.sets.filter(s => s.isPersonalBest))
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onClose}>
+      <div
+        className="w-full bg-background rounded-t-3xl max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 bg-border rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="px-5 pb-3 border-b border-border shrink-0">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-lg font-bold">{session.name}</h2>
+              <p className="text-muted text-sm mt-0.5">
+                {format(new Date(session.startedAt), 'EEEE, MMM d yyyy')}
+                {' · '}
+                {formatDistanceToNow(new Date(session.startedAt), { addSuffix: true })}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-muted text-sm mt-1">✕</button>
+          </div>
+
+          <div className="flex gap-5 mt-3">
+            {duration != null && (
+              <div>
+                <p className="text-base font-bold">{duration} min</p>
+                <p className="text-xs text-muted">Duration</p>
+              </div>
+            )}
+            {session.totalVolume != null && (
+              <div>
+                <p className="text-base font-bold">{Math.round(session.totalVolume).toLocaleString()} kg</p>
+                <p className="text-xs text-muted">Volume</p>
+              </div>
+            )}
+            <div>
+              <p className="text-base font-bold">{session.exercises.length}</p>
+              <p className="text-xs text-muted">Exercises</p>
+            </div>
+            {prs.length > 0 && (
+              <div>
+                <p className="text-base font-bold text-warning">🏆 {prs.length}</p>
+                <p className="text-xs text-muted">PRs</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Exercise list */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5 pb-8">
+          {session.exercises.map(se => (
+            <div key={se.id}>
+              <h3 className="font-semibold mb-2">{se.exercise.name}</h3>
+              {se.notes && <p className="text-xs text-muted italic mb-2">{se.notes}</p>}
+
+              <div className="space-y-1">
+                <div className="flex gap-4 text-[10px] font-medium text-muted uppercase tracking-wide px-1">
+                  <span className="w-6">Set</span>
+                  <span className="w-16">Weight</span>
+                  <span className="w-10">Reps</span>
+                  <span className="w-8">1RM</span>
+                </div>
+                {se.sets.map(s => {
+                  const oneRM = s.reps > 0 ? (s.weightKg * (1 + s.reps / 30)).toFixed(1) : '—'
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex gap-4 px-1 py-1 rounded-lg text-sm ${s.isPersonalBest ? 'bg-warning/10' : ''}`}
+                    >
+                      <span className="w-6 text-muted">{s.setNumber}</span>
+                      <span className="w-16 font-medium">{s.weightKg} kg</span>
+                      <span className="w-10">{s.reps}</span>
+                      <span className="w-8 text-muted text-xs self-center">{oneRM}</span>
+                      {s.isPersonalBest && <span className="text-warning text-xs self-center">🏆 PR</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+.env
+*.local
+
+# Prisma
+apps/api/prisma/migrations/
+
+# Docker volumes
+postgres_data/
+backups/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Capacitor
+apps/web/ios/
+apps/web/android/
