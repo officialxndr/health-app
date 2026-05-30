@@ -26,3 +26,6 @@ npm-debug.log*
 # Capacitor
 apps/web/ios/
 apps/web/android/
+
+# Claude Code temp files (created during editing on Windows)
+*.tmp.*
