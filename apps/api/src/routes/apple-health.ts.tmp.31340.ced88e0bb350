@@ -1,0 +1,109 @@
+import { FastifyPluginAsync } from 'fastify'
+import { parseStringPromise } from 'xml2js'
+import { prisma } from '../lib/prisma.js'
+
+type HealthRecord = {
+  $: {
+    type: string
+    value: string
+    unit?: string
+    startDate: string
+    endDate?: string
+  }
+}
+
+type ParsedHealthData = {
+  HealthData?: {
+    Record?: HealthRecord | HealthRecord[]
+  }
+}
+
+const BODY_MASS_TYPE = 'HKQuantityTypeIdentifierBodyMass'
+
+const appleHealthRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.post('/import', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const data = await request.file()
+    if (!data) return reply.status(400).send({ error: 'No file uploaded' })
+
+    const chunks: Buffer[] = []
+    for await (const chunk of data.file) {
+      chunks.push(chunk)
+    }
+    const xml = Buffer.concat(chunks).toString('utf-8')
+
+    // Apple Health exports include an inline DTD block (<!DOCTYPE HealthData [...]>)
+    // that xml2js cannot parse. Strip it before parsing.
+    const sanitized = xml.replace(/<!DOCTYPE[^[]*\[[\s\S]*?\]>/i, '')
+
+    let parsed: ParsedHealthData
+    try {
+      parsed = await parseStringPromise(sanitized, { explicitArray: false })
+    } catch {
+      return reply.status(400).send({ error: 'Invalid XML — make sure you upload the export.xml file directly, not the ZIP' })
+    }
+
+    const rawRecords = parsed?.HealthData?.Record
+    if (!rawRecords) {
+      return reply.status(400).send({ error: 'No health records found — check that this is a valid Apple Health export' })
+    }
+
+    const records: HealthRecord[] = Array.isArray(rawRecords) ? rawRecords : [rawRecords]
+
+    // Group body mass records by date — keep the first (earliest) reading per day
+    const weightByDate = new Map<string, number>()
+
+    for (const record of records) {
+      if (record.$.type !== BODY_MASS_TYPE) continue
+
+      const rawValue = parseFloat(record.$.value)
+      if (isNaN(rawValue)) continue
+
+      const dateStr = record.$.startDate?.split(' ')[0] // "2024-01-15 08:00:00 +0000" → "2024-01-15"
+      if (!dateStr) continue
+
+      const unit = record.$.unit ?? 'kg'
+      const kg = unit === 'lb' ? rawValue / 2.20462 : rawValue
+      const rounded = Math.round(kg * 100) / 100
+
+      if (!weightByDate.has(dateStr)) {
+        weightByDate.set(dateStr, rounded)
+      }
+    }
+
+    let importedCount = 0
+    for (const [dateStr, weightKg] of weightByDate) {
+      await prisma.weightEntry.upsert({
+        where: { userId_date: { userId: request.user.userId, date: new Date(dateStr) } },
+        update: { weightKg, source: 'APPLE_HEALTH' },
+        create: {
+          userId: request.user.userId,
+          date: new Date(dateStr),
+          weightKg,
+          source: 'APPLE_HEALTH',
+        },
+      })
+      importedCount++
+    }
+
+    await prisma.healthImport.create({
+      data: {
+        userId: request.user.userId,
+        type: 'XML_IMPORT',
+        recordCount: importedCount,
+      },
+    })
+
+    return { ok: true, weightEntries: importedCount }
+  })
+
+  // Return past import history for this user
+  fastify.get('/history', { onRequest: [fastify.authenticate] }, async (request) => {
+    return prisma.healthImport.findMany({
+      where: { userId: request.user.userId },
+      orderBy: { importedAt: 'desc' },
+      take: 10,
+    })
+  })
+}
+
+export default appleHealthRoutes

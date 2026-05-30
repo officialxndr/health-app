@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useUiStore } from '@/stores/uiStore'
 import { toDisplayLength, fromDisplayLength, UNIT_LABELS } from '@/lib/units'
 import type { BodyMeasurement } from '@/types'
 import { format } from 'date-fns'
@@ -90,6 +91,16 @@ export function Measurements() {
 
   useEffect(() => { fetchMeasurements() }, [])
 
+  // Open the add form when triggered by the section FAB ("Log measurement").
+  const quickAction = useUiStore((s) => s.quickAction)
+  const clearQuickAction = useUiStore((s) => s.clearQuickAction)
+  useEffect(() => {
+    if (quickAction === 'health.measurement') {
+      setShowForm(true)
+      clearQuickAction()
+    }
+  }, [quickAction, clearQuickAction])
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -121,7 +132,7 @@ export function Measurements() {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       {/* Header */}
-      <div className="bg-surface border-b border-border px-4 pt-3 pb-0 safe-top">
+      <div className="bg-surface border-b border-border px-4 pt-3 pb-0">
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl font-bold">Measurements</h1>
           <button

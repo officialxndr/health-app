@@ -1,18 +1,21 @@
+import type { LucideIcon } from 'lucide-react'
+import { Footprints, Activity as ActivityIcon, Bike, Waves, Cog, Dumbbell, PersonStanding } from '@/components/icons'
+
 interface Activity {
   name: string
   met: number
-  emoji: string
+  icon: LucideIcon
 }
 
 export const ACTIVITIES: Activity[] = [
-  { name: 'Walking (brisk)', met: 4.3, emoji: '🚶' },
-  { name: 'Walking (casual)', met: 3.0, emoji: '🚶' },
-  { name: 'Jogging (5 mph)', met: 8.0, emoji: '🏃' },
-  { name: 'Cycling (moderate)', met: 8.0, emoji: '🚴' },
-  { name: 'Swimming (moderate)', met: 6.0, emoji: '🏊' },
-  { name: 'Elliptical (moderate)', met: 5.0, emoji: '⚙️' },
-  { name: 'Bodyweight circuit', met: 5.0, emoji: '💪' },
-  { name: 'Yoga', met: 3.0, emoji: '🧘' },
+  { name: 'Walking (brisk)', met: 4.3, icon: Footprints },
+  { name: 'Walking (casual)', met: 3.0, icon: Footprints },
+  { name: 'Jogging (5 mph)', met: 8.0, icon: ActivityIcon },
+  { name: 'Cycling (moderate)', met: 8.0, icon: Bike },
+  { name: 'Swimming (moderate)', met: 6.0, icon: Waves },
+  { name: 'Elliptical (moderate)', met: 5.0, icon: Cog },
+  { name: 'Bodyweight circuit', met: 5.0, icon: Dumbbell },
+  { name: 'Yoga', met: 3.0, icon: PersonStanding },
 ]
 
 export function minutesToBurnCalories(activity: Activity, weightKg: number, targetCals: number): number {

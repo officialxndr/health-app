@@ -1,0 +1,240 @@
+import { create } from 'zustand'
+import type { WorkoutSession, WorkoutTemplate, Exercise, ExerciseSet } from '@/types'
+import { api } from '@/lib/api'
+
+export interface LocalSet {
+  localId: string
+  setNumber: number
+  weightKg: number
+  reps: number
+  rpe?: number
+  done: boolean
+  isPersonalBest: boolean
+}
+
+export interface LocalExercise {
+  localId: string
+  exerciseId: string
+  exercise: Exercise
+  notes: string
+  order: number
+  sets: LocalSet[]
+  lastSets: ExerciseSet[]
+  restSeconds: number
+}
+
+const DEFAULT_REST_SECONDS = 120
+
+let _idCounter = 0
+const nextId = () => String(++_idCounter)
+
+interface WorkoutState {
+  activeSession: WorkoutSession | null
+  sessionStartedAt: Date | null
+  localExercises: LocalExercise[]
+  templates: WorkoutTemplate[]
+
+  loadTemplates: () => Promise<void>
+  startSession: (name: string, templateId?: string) => Promise<WorkoutSession>
+  setActiveSession: (session: WorkoutSession | null) => void
+  discardSession: () => void
+  finishSession: () => Promise<WorkoutSession>
+
+  addExerciseToSession: (exercise: Exercise) => void
+  removeExerciseFromSession: (localId: string) => void
+  reorderExercises: (exercises: LocalExercise[]) => void
+  addSet: (localExerciseId: string) => void
+  removeSet: (localExerciseId: string, setLocalId: string) => void
+  updateSet: (localExerciseId: string, setLocalId: string, changes: Partial<Omit<LocalSet, 'localId'>>) => void
+  updateExerciseNotes: (localExerciseId: string, notes: string) => void
+}
+
+export const useWorkoutStore = create<WorkoutState>((set, get) => ({
+  activeSession: null,
+  sessionStartedAt: null,
+  localExercises: [],
+  templates: [],
+
+  loadTemplates: async () => {
+    const { data } = await api.get('/workouts/templates')
+    set({ templates: data })
+  },
+
+  startSession: async (name, templateId) => {
+    const { data } = await api.post<WorkoutSession>('/workouts/sessions', { name, templateId })
+    const session = data
+    const { templates } = get()
+    const template = templateId ? templates.find(t => t.id === templateId) : null
+
+    // Fetch last sets for each exercise in parallel for ghost values
+    const lastSetsMap = new Map<string, ExerciseSet[]>()
+    await Promise.all(
+      session.exercises.map(async se => {
+        const lastSets = await api.get<ExerciseSet[]>(`/workouts/last/${se.exercise.id}`)
+          .then(r => r.data).catch(() => [])
+        lastSetsMap.set(se.exercise.id, lastSets)
+      })
+    )
+
+    const localExercises: LocalExercise[] = session.exercises.map(se => {
+      const lastSets = lastSetsMap.get(se.exercise.id) ?? []
+      const tmplEx = template?.exercises.find(te => te.exercise.id === se.exercise.id)
+      const numSets = tmplEx?.defaultSets ?? (lastSets.length > 0 ? lastSets.length : 3)
+
+      const sets: LocalSet[] = Array.from({ length: numSets }, (_, i) => ({
+        localId: nextId(),
+        setNumber: i + 1,
+        weightKg: lastSets[i]?.weightKg ?? tmplEx?.defaultWeightKg ?? 0,
+        reps: lastSets[i]?.reps ?? tmplEx?.defaultReps ?? 8,
+        done: false,
+        isPersonalBest: false,
+      }))
+
+      return {
+        localId: nextId(),
+        exerciseId: se.exercise.id,
+        exercise: se.exercise,
+        notes: '',
+        order: se.order,
+        sets,
+        lastSets,
+      }
+    })
+
+    set({ activeSession: session, sessionStartedAt: new Date(), localExercises })
+    return session
+  },
+
+  setActiveSession: session => set({ activeSession: session }),
+
+  discardSession: () => {
+    set({ activeSession: null, localExercises: [], sessionStartedAt: null })
+  },
+
+  finishSession: async () => {
+    const { activeSession, localExercises } = get()
+    if (!activeSession) throw new Error('No active session')
+
+    const exercises = localExercises.map((le, i) => ({
+      exerciseId: le.exerciseId,
+      notes: le.notes || undefined,
+      order: i,
+      sets: le.sets.map(s => ({
+        setNumber: s.setNumber,
+        weightKg: s.weightKg,
+        reps: s.reps,
+        rpe: s.rpe,
+      })),
+    }))
+
+    const { data } = await api.put<WorkoutSession>(`/workouts/sessions/${activeSession.id}`, {
+      exercises,
+      finishedAt: new Date().toISOString(),
+    })
+
+    set({ activeSession: null, localExercises: [], sessionStartedAt: null })
+    return data
+  },
+
+  addExerciseToSession: exercise => {
+    const { localExercises } = get()
+    const newEx: LocalExercise = {
+      localId: nextId(),
+      exerciseId: exercise.id,
+      exercise,
+      notes: '',
+      order: localExercises.length,
+      sets: [{ localId: nextId(), setNumber: 1, weightKg: 0, reps: 8, done: false, isPersonalBest: false }],
+      lastSets: [],
+    }
+
+    // Fetch last sets in background and patch in defaults
+    api.get<ExerciseSet[]>(`/workouts/last/${exercise.id}`).then(r => {
+      if (!r.data.length) return
+      set(state => ({
+        localExercises: state.localExercises.map(le =>
+          le.localId !== newEx.localId ? le : {
+            ...le,
+            lastSets: r.data,
+            sets: r.data.map((s, i) => ({
+              localId: nextId(),
+              setNumber: i + 1,
+              weightKg: s.weightKg,
+              reps: s.reps,
+              done: false,
+              isPersonalBest: false,
+            })),
+          }
+        ),
+      }))
+    }).catch(() => {})
+
+    set({ localExercises: [...localExercises, newEx] })
+  },
+
+  removeExerciseFromSession: localId => {
+    set(s => ({
+      localExercises: s.localExercises
+        .filter(le => le.localId !== localId)
+        .map((le, i) => ({ ...le, order: i })),
+    }))
+  },
+
+  reorderExercises: exercises => {
+    set({ localExercises: exercises.map((le, i) => ({ ...le, order: i })) })
+  },
+
+  addSet: localExerciseId => {
+    set(s => ({
+      localExercises: s.localExercises.map(le => {
+        if (le.localId !== localExerciseId) return le
+        const last = le.sets[le.sets.length - 1]
+        return {
+          ...le,
+          sets: [...le.sets, {
+            localId: nextId(),
+            setNumber: le.sets.length + 1,
+            weightKg: last?.weightKg ?? 0,
+            reps: last?.reps ?? 8,
+            done: false,
+            isPersonalBest: false,
+          }],
+        }
+      }),
+    }))
+  },
+
+  removeSet: (localExerciseId, setLocalId) => {
+    set(s => ({
+      localExercises: s.localExercises.map(le => {
+        if (le.localId !== localExerciseId) return le
+        return {
+          ...le,
+          sets: le.sets
+            .filter(s => s.localId !== setLocalId)
+            .map((s, i) => ({ ...s, setNumber: i + 1 })),
+        }
+      }),
+    }))
+  },
+
+  updateSet: (localExerciseId, setLocalId, changes) => {
+    set(s => ({
+      localExercises: s.localExercises.map(le => {
+        if (le.localId !== localExerciseId) return le
+        return {
+          ...le,
+          sets: le.sets.map(s => s.localId === setLocalId ? { ...s, ...changes } : s),
+        }
+      }),
+    }))
+  },
+
+  updateExerciseNotes: (localExerciseId, notes) => {
+    set(s => ({
+      localExercises: s.localExercises.map(le =>
+        le.localId === localExerciseId ? { ...le, notes } : le
+      ),
+    }))
+  },
+}))

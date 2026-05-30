@@ -1,0 +1,366 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  name             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  profile           UserProfile?
+  foodLogs          FoodLog[]
+  recipes           Recipe[]
+  goalPhases        GoalPhase[]
+  workoutSessions   WorkoutSession[]
+  workoutTemplates  WorkoutTemplate[]
+  weightEntries     WeightEntry[]
+  measurements      BodyMeasurement[]
+  healthImports     HealthImport[]
+  pushSubscriptions PushSubscription[]
+  refreshTokens     RefreshToken[]
+  customFoods       FoodItem[]
+}
+
+model UserProfile {
+  id                  String          @id @default(cuid())
+  userId              String          @unique
+  user                User            @relation(fields: [userId], references: [id])
+  birthDate           DateTime?
+  heightCm            Float?
+  goalWeightKg        Float?
+  goalBodyFat         Float?
+  goalDate            DateTime?
+  activityLevel       ActivityLevel   @default(MODERATE)
+  sex                 Sex?
+  goalType            GoalType        @default(MAINTAIN)
+  unitSystem          UnitSystem      @default(METRIC)
+  calorieGoal         Int?
+  proteinTarget       Int?
+  carbsTarget         Int?
+  fatTarget           Int?
+  macroTargetMode     MacroTargetMode @default(GRAMS)
+  countActiveCalories Boolean         @default(false)
+  notificationPrefs   Json?
+  avatarUrl           String?         // small square image stored as a data URL
+  updatedAt           DateTime        @updatedAt
+}
+
+enum MacroTargetMode {
+  GRAMS
+  PERCENT
+}
+
+enum GoalType {
+  LOSE
+  GAIN
+  MAINTAIN
+}
+
+enum UnitSystem {
+  METRIC
+  IMPERIAL
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHT
+  MODERATE
+  ACTIVE
+  VERY_ACTIVE
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// ─── FOOD TRACKING ───────────────────────────────────────────
+
+model FoodLog {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  date       DateTime  @db.Date
+  meal       MealType
+  foodItem   FoodItem? @relation(fields: [foodItemId], references: [id])
+  foodItemId String?
+  recipe     Recipe?   @relation(fields: [recipeId], references: [id])
+  recipeId   String?
+  servingQty Float
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, date])
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+model FoodItem {
+  id          String     @id @default(cuid())
+  barcode     String?    @unique
+  name        String
+  brand       String?
+  servingSize Float
+  servingUnit String     @default("g")
+  calories    Float
+  protein     Float
+  carbs       Float
+  fat         Float
+  fiber       Float?
+  sugar       Float?
+  sodium      Float?
+  source      FoodSource @default(MANUAL)
+  createdById String?
+  createdBy   User?      @relation(fields: [createdById], references: [id])
+  isCustom    Boolean    @default(false)
+  logs        FoodLog[]
+  recipeUses  RecipeIngredient[]
+  createdAt   DateTime   @default(now())
+
+  @@index([barcode])
+  @@index([name])
+}
+
+enum FoodSource {
+  MANUAL
+  OPEN_FOOD_FACTS
+  USDA
+}
+
+// ─── RECIPES ─────────────────────────────────────────────────
+
+model Recipe {
+  id          String             @id @default(cuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id])
+  name        String
+  description String?
+  servings    Float              @default(1)
+  ingredients RecipeIngredient[]
+  logs        FoodLog[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([userId, name])
+}
+
+model RecipeIngredient {
+  id         String   @id @default(cuid())
+  recipeId   String
+  recipe     Recipe   @relation(fields: [recipeId], references: [id])
+  foodItem   FoodItem @relation(fields: [foodItemId], references: [id])
+  foodItemId String
+  quantity   Float
+}
+
+// ─── EXERCISE LIBRARY ────────────────────────────────────────
+
+model Exercise {
+  id                String   @id @default(cuid())
+  exerciseDbId      String?  @unique
+  name              String
+  nameAlternative   String?
+  description       String?
+  instructions      String[]
+  tips              String[]
+  muscleGroup       String?
+  musclesPrimary    String[]
+  musclesSecondary  String[]
+  equipment         String?
+  category          String?
+  imageUrl          String?
+  videoUrl          String?
+  gifUrl            String?
+  isCustom          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  templateExercises TemplateExercise[]
+  sessionExercises  SessionExercise[]
+}
+
+// ─── WORKOUT LOGGING ─────────────────────────────────────────
+
+model WorkoutTemplate {
+  id          String             @id @default(cuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id])
+  name        String
+  description String?
+  label       String?
+  exercises   TemplateExercise[]
+  sessions    WorkoutSession[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model TemplateExercise {
+  id              String          @id @default(cuid())
+  templateId      String
+  template        WorkoutTemplate @relation(fields: [templateId], references: [id])
+  exerciseId      String
+  exercise        Exercise        @relation(fields: [exerciseId], references: [id])
+  defaultSets     Int             @default(3)
+  defaultReps     Int?
+  defaultWeightKg Float?
+  restSeconds     Int?
+  order           Int
+}
+
+model WorkoutSession {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+  templateId  String?
+  template    WorkoutTemplate? @relation(fields: [templateId], references: [id])
+  name        String
+  startedAt   DateTime
+  finishedAt  DateTime?
+  notes       String?
+  totalVolume Float?
+  exercises   SessionExercise[]
+  createdAt   DateTime         @default(now())
+
+  @@index([userId, startedAt])
+}
+
+model SessionExercise {
+  id         String         @id @default(cuid())
+  sessionId  String
+  session    WorkoutSession @relation(fields: [sessionId], references: [id])
+  exerciseId String
+  exercise   Exercise       @relation(fields: [exerciseId], references: [id])
+  notes      String?
+  order      Int
+  sets       ExerciseSet[]
+}
+
+model ExerciseSet {
+  id                String          @id @default(cuid())
+  sessionExerciseId String
+  sessionExercise   SessionExercise @relation(fields: [sessionExerciseId], references: [id])
+  setNumber         Int
+  weightKg          Float
+  reps              Int
+  rpe               Float?
+  isPersonalBest    Boolean         @default(false)
+}
+
+// ─── HEALTH / WEIGHT DATA ────────────────────────────────────
+
+model WeightEntry {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  date      DateTime   @db.Date
+  weightKg  Float
+  bodyFat   Float?
+  source    DataSource @default(MANUAL)
+  createdAt DateTime   @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+// ─── GOAL PHASES ─────────────────────────────────────────────
+
+model GoalPhase {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  name           String
+  goalType       GoalType
+  startDate      DateTime @db.Date
+  endDate        DateTime @db.Date
+  targetWeightKg Float?
+  targetBodyFat  Float?
+  weeklyRateKg   Float?
+  calorieTarget  Int?
+  proteinTarget  Int?
+  carbsTarget    Int?
+  fatTarget      Int?
+  cycleId        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, startDate, endDate])
+}
+
+// ─── BODY MEASUREMENTS ───────────────────────────────────────
+
+model BodyMeasurement {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  date       DateTime @db.Date
+  neck       Float?
+  shoulders  Float?
+  chest      Float?
+  leftArm    Float?
+  rightArm   Float?
+  waist      Float?
+  hips       Float?
+  leftThigh  Float?
+  rightThigh Float?
+  leftCalf   Float?
+  rightCalf  Float?
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+enum DataSource {
+  MANUAL
+  APPLE_HEALTH
+  SHORTCUT
+}
+
+model HealthImport {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String
+  importedAt  DateTime @default(now())
+  recordCount Int
+}
+
+// ─── PUSH NOTIFICATIONS ──────────────────────────────────────
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  platform  String   @default("web")
+  createdAt DateTime @default(now())
+}
+
+// ─── AUTH (REFRESH TOKEN ROTATION) ───────────────────────────
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}

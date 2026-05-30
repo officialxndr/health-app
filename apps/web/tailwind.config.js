@@ -15,10 +15,12 @@ export default {
         'ping-once': 'ping-once 0.7s ease-out forwards',
       },
       colors: {
-        background: '#0a0a0a',
-        surface: '#141414',
-        surfaceHigh: '#1e1e1e',
-        border: '#2a2a2a',
+        background: 'var(--color-background)',
+        surface: 'var(--color-surface)',
+        surfaceHigh: 'var(--color-surface-high)',
+        border: 'var(--color-border)',
+        muted: 'var(--color-muted)',
+        text: 'var(--color-text)',
         primary: {
           DEFAULT: '#6366f1',
           hover: '#818cf8',
@@ -26,7 +28,6 @@ export default {
         success: '#22c55e',
         warning: '#f59e0b',
         danger: '#ef4444',
-        muted: '#6b7280',
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],

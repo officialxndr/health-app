@@ -1,0 +1,284 @@
+import { useEffect, useState } from 'react'
+import { api } from '@/lib/api'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useUiStore } from '@/stores/uiStore'
+import { toDisplayLength, fromDisplayLength, UNIT_LABELS } from '@/lib/units'
+import type { BodyMeasurement } from '@/types'
+import { format } from 'date-fns'
+import {
+  LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip,
+} from 'recharts'
+
+const MEASUREMENT_FIELDS: { key: keyof Omit<BodyMeasurement, 'id' | 'date' | 'notes' | 'createdAt' | 'userId'>; label: string }[] = [
+  { key: 'neck', label: 'Neck' },
+  { key: 'shoulders', label: 'Shoulders' },
+  { key: 'chest', label: 'Chest' },
+  { key: 'leftArm', label: 'Left Arm' },
+  { key: 'rightArm', label: 'Right Arm' },
+  { key: 'waist', label: 'Waist' },
+  { key: 'hips', label: 'Hips' },
+  { key: 'leftThigh', label: 'Left Thigh' },
+  { key: 'rightThigh', label: 'Right Thigh' },
+  { key: 'leftCalf', label: 'Left Calf' },
+  { key: 'rightCalf', label: 'Right Calf' },
+]
+
+type View = 'summary' | 'charts'
+
+function MeasurementChart({
+  measurements,
+  field,
+  label,
+  unitSystem,
+}: {
+  measurements: BodyMeasurement[]
+  field: string
+  label: string
+  unitSystem: 'METRIC' | 'IMPERIAL'
+}) {
+  const data = measurements
+    .filter((m) => m[field as keyof BodyMeasurement] != null)
+    .map((m) => ({
+      date: format(new Date(m.date), 'MMM d'),
+      value: toDisplayLength(m[field as keyof BodyMeasurement] as number, unitSystem),
+    }))
+
+  if (data.length < 2) return null
+
+  const lengthLabel = UNIT_LABELS[unitSystem].smallLength
+  const first = data[0].value
+  const last = data[data.length - 1].value
+  const change = last - first
+  const changeStr = `${change > 0 ? '+' : ''}${change.toFixed(1)} ${lengthLabel}`
+  const changeColor = change < 0 ? 'text-success' : change > 0 ? 'text-danger' : 'text-muted'
+
+  return (
+    <div className="bg-surface rounded-2xl p-4">
+      <div className="flex items-baseline justify-between mb-3">
+        <p className="text-sm font-medium">{label}</p>
+        <div className="flex items-baseline gap-2">
+          <span className="text-base font-bold">{last} {lengthLabel}</span>
+          <span className={`text-xs ${changeColor}`}>{changeStr} all time</span>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={100}>
+        <LineChart data={data} margin={{ left: -20, right: 8 }}>
+          <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} interval="preserveStartEnd" />
+          <YAxis domain={['auto', 'auto']} tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} width={32} />
+          <Tooltip
+            contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }}
+            formatter={(v: number) => [`${v} ${lengthLabel}`, label]}
+          />
+          <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+export function Measurements() {
+  const { unitSystem } = useSettingsStore()
+  const lengthLabel = UNIT_LABELS[unitSystem].smallLength
+  const [measurements, setMeasurements] = useState<BodyMeasurement[]>([])
+  const [showForm, setShowForm] = useState(false)
+  const [formData, setFormData] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [view, setView] = useState<View>('summary')
+
+  const fetchMeasurements = () => {
+    api.get('/measurements').then(({ data }) => setMeasurements(data)).catch(() => {})
+  }
+
+  useEffect(() => { fetchMeasurements() }, [])
+
+  // Open the add form when triggered by the section FAB ("Log measurement").
+  const quickAction = useUiStore((s) => s.quickAction)
+  const clearQuickAction = useUiStore((s) => s.clearQuickAction)
+  useEffect(() => {
+    if (quickAction === 'health.measurement') {
+      setShowForm(true)
+      clearQuickAction()
+    }
+  }, [quickAction, clearQuickAction])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const payload: Record<string, any> = {
+        date: new Date().toISOString().split('T')[0],
+      }
+      for (const field of MEASUREMENT_FIELDS) {
+        if (formData[field.key]) {
+          payload[field.key] = fromDisplayLength(parseFloat(formData[field.key]), unitSystem)
+        }
+      }
+      await api.post('/measurements', payload)
+      setShowForm(false)
+      setFormData({})
+      fetchMeasurements()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const latest = measurements.at(-1)
+  const prev = measurements.at(-2)
+
+  // Fields that have at least 2 data points for chart display
+  const chartsFields = MEASUREMENT_FIELDS.filter(({ key }) =>
+    measurements.filter((m) => m[key] != null).length >= 2
+  )
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      {/* Header */}
+      <div className="bg-surface border-b border-border px-4 pt-3 pb-0 safe-top">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-xl font-bold">Measurements</h1>
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-primary text-white text-sm font-medium px-4 py-1.5 rounded-xl"
+          >
+            + Add
+          </button>
+        </div>
+
+        {/* View toggle */}
+        <div className="flex gap-1">
+          {(['summary', 'charts'] as View[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`flex-1 py-2 text-sm font-medium rounded-t-lg border-b-2 capitalize transition-colors ${
+                view === v ? 'border-primary text-primary' : 'border-transparent text-muted'
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 pb-nav space-y-4">
+        {measurements.length === 0 && (
+          <p className="text-center text-muted text-sm py-12">
+            No measurements logged yet. Tap + Add to get started.
+          </p>
+        )}
+
+        {view === 'summary' && (
+          <>
+            {/* Latest measurements */}
+            {latest && (
+              <div className="bg-surface rounded-2xl p-4">
+                <p className="text-xs text-muted mb-3">{format(new Date(latest.date), 'MMM d, yyyy')}</p>
+                <div className="space-y-2">
+                  {MEASUREMENT_FIELDS.map(({ key, label }) => {
+                    const val = latest[key] as number | null | undefined
+                    if (!val) return null
+                    const display = toDisplayLength(val, unitSystem)
+                    const prevVal = prev?.[key] as number | null | undefined
+                    const diff = prevVal
+                      ? Math.round((toDisplayLength(val, unitSystem) - toDisplayLength(prevVal, unitSystem)) * 10) / 10
+                      : null
+
+                    return (
+                      <div key={key} className="flex items-center justify-between text-sm">
+                        <span className="text-muted">{label}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{display} {lengthLabel}</span>
+                          {diff !== null && diff !== 0 && (
+                            <span className={`text-xs ${diff < 0 ? 'text-success' : 'text-danger'}`}>
+                              {diff > 0 ? '+' : ''}{diff}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* History */}
+            {measurements.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted font-medium uppercase tracking-wide">History</p>
+                {[...measurements].reverse().slice(1).map((m) => (
+                  <div key={m.id} className="bg-surface rounded-xl p-3">
+                    <p className="text-sm text-muted">{format(new Date(m.date), 'MMM d, yyyy')}</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                      {MEASUREMENT_FIELDS.filter(({ key }) => m[key]).map(({ key, label }) => (
+                        <span key={key} className="text-xs text-muted">
+                          {label}: {toDisplayLength(m[key] as number, unitSystem)}{lengthLabel}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {view === 'charts' && (
+          <>
+            {chartsFields.length === 0 ? (
+              <p className="text-center text-muted text-sm py-8">
+                Log at least 2 entries to see trend charts.
+              </p>
+            ) : (
+              chartsFields.map(({ key, label }) => (
+                <MeasurementChart
+                  key={key}
+                  measurements={measurements}
+                  field={key}
+                  label={label}
+                  unitSystem={unitSystem}
+                />
+              ))
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Add form modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border safe-top">
+            <h2 className="font-semibold">New Measurement</h2>
+            <div className="flex gap-3">
+              <button onClick={() => setShowForm(false)} className="text-muted text-sm">Cancel</button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="text-primary text-sm font-medium disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <p className="text-xs text-muted">Fill in only the measurements you have today.</p>
+            {MEASUREMENT_FIELDS.map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between">
+                <label className="text-sm text-muted w-28">{label}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formData[key] ?? ''}
+                    onChange={(e) => setFormData((p) => ({ ...p, [key]: e.target.value }))}
+                    className="w-24 bg-surfaceHigh rounded-xl px-3 py-2 text-sm text-right outline-none"
+                    placeholder="—"
+                  />
+                  <span className="text-xs text-muted w-6">{lengthLabel}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
