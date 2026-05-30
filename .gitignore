@@ -29,3 +29,7 @@ apps/web/android/
 
 # Claude Code temp files (created during editing on Windows)
 *.tmp.*
+
+# Apple Health exports (large XML files)
+export.xml
+apple_health_export/
