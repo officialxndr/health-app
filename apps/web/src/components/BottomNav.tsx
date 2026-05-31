@@ -48,7 +48,7 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="relative flex-shrink-0 bg-surface border-t border-border safe-bottom">
+      <nav className="relative shrink-0 bg-surface border-t border-border safe-bottom">
         {hasFab ? (
           <div className="flex items-stretch">
             <div className="flex-1 flex">

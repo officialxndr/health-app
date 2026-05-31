@@ -28,12 +28,7 @@
     box-sizing: border-box;
   }
 
-  html {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  body {
+  html, body {
     height: 100%;
     overflow: hidden;
     background-color: var(--color-background);
@@ -42,9 +37,13 @@
   }
 
   #root {
-    height: 100%;
+    /* position:fixed + inset:0 is the most reliable way to fill the exact
+       viewport on iOS PWA — immune to height:100% cascade failures */
+    position: fixed;
+    inset: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
 }
 
@@ -54,11 +53,11 @@
   }
 
   .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: max(env(safe-area-inset-bottom), 4px);
   }
 
   .pb-nav {
-    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+    padding-bottom: 2rem;
   }
 
   .no-scrollbar {

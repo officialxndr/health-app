@@ -122,15 +122,10 @@ const foodRoutes: FastifyPluginAsync = async (fastify) => {
           OR: [{ isCustom: false }, { createdById: request.user.userId }],
         },
         orderBy: [{ isCustom: 'desc' }, { name: 'asc' }],
-        take: 30,
+        take: 50,
       })
 
-      // Short-circuit if local cache is rich
       const customResults = local.filter((l) => l.isCustom)
-      if (local.length >= 10 && customResults.length === 0) {
-        return local.slice(0, 30)
-      }
-
       const localBarcodes = new Set(local.map((l) => l.barcode).filter(Boolean))
 
       // Helper: convert USDA food to FoodItem shape
@@ -174,11 +169,12 @@ const foodRoutes: FastifyPluginAsync = async (fastify) => {
             search_simple: 1,
             action: 'process',
             json: 1,
-            page_size: 20,
+            page_size: 100,
+            sort_by: 'unique_scans_n',
             fields: 'product_name,brands,nutriments,serving_size,code',
           },
           headers: { 'User-Agent': 'FitSelf/1.0 (zander.halverson99@gmail.com)' },
-          timeout: 6000,
+          timeout: 8000,
         }),
       ])
 
@@ -204,19 +200,18 @@ const foodRoutes: FastifyPluginAsync = async (fastify) => {
         const products: any[] = offResult.value.data?.products ?? []
         for (const p of products) {
           if (!p.product_name) continue
-          // Filter: skip very long names (usually ingredient lists) or incomplete data
-          if (p.product_name.length > 80) continue
+          if (p.product_name.length > 120) continue  // skip ingredient-list dumps
           const barcode = p.code || null
           if (barcode && localBarcodes.has(barcode)) continue
 
           const nutriments = p.nutriments ?? {}
           const calories = nutriments['energy-kcal_serving'] ?? nutriments['energy-kcal_100g'] ?? 0
-          const protein = nutriments.proteins_serving ?? nutriments.proteins_100g ?? 0
-          const carbs = nutriments.carbohydrates_serving ?? nutriments.carbohydrates_100g ?? 0
-          if (!calories || (!protein && !carbs)) continue  // skip nutritionally incomplete
+          if (!calories) continue  // only skip if calories are completely missing
 
           try {
-            const createData = {
+            const protein = nutriments.proteins_serving ?? nutriments.proteins_100g ?? 0
+          const carbs = nutriments.carbohydrates_serving ?? nutriments.carbohydrates_100g ?? 0
+          const createData = {
               barcode: barcode ?? undefined,
               name: p.product_name,
               brand: p.brands || undefined,
@@ -238,13 +233,30 @@ const foodRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Merge: custom foods → USDA generic → local cached → OFF branded
-      const merged = [
-        ...customResults,
+      // Relevance score: how closely the item name matches the query.
+      // Higher = shown first. Custom foods always win regardless of score.
+      const score = (name: string): number => {
+        const n = name.toLowerCase().trim()
+        const q2 = q.toLowerCase().trim()
+        if (n === q2) return 100
+        if (n.startsWith(q2 + ' ') || n.startsWith(q2 + ',') || n.startsWith(q2 + '(')) return 90
+        const words = n.split(/[\s,()/]+/).filter(Boolean)
+        if (words[0] === q2) return 85
+        if (words.some((w) => w === q2)) return 70
+        if (words.some((w) => w.startsWith(q2))) return 50
+        if (n.includes(q2)) return 30
+        return 10
+      }
+
+      // Merge: custom foods first, then everything else sorted by relevance
+      const rest = [
         ...usdaItems,
         ...local.filter((l) => !l.isCustom),
         ...offItems,
       ]
+      rest.sort((a, b) => score(b.name) - score(a.name))
+
+      const merged = [...customResults, ...rest]
 
       // Deduplicate by id
       const seen = new Set<string>()
@@ -252,7 +264,7 @@ const foodRoutes: FastifyPluginAsync = async (fastify) => {
         if (seen.has(item.id)) return false
         seen.add(item.id)
         return true
-      }).slice(0, 30)
+      }).slice(0, 100)
     }
   )
 

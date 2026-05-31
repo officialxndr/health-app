@@ -286,7 +286,9 @@ export function AddFoodModal({ meal, onClose, initialTab = 'search', initialScan
   const [tab, setTab] = useState<Tab>(initialTab)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodItem[]>([])
+  const [displayCount, setDisplayCount] = useState(20)
   const [searching, setSearching] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
   const [showScanner, setShowScanner] = useState(initialScanner)
   const [showCustomForm, setShowCustomForm] = useState(false)
   const [customBarcode, setCustomBarcode] = useState<string | undefined>()
@@ -302,6 +304,7 @@ export function AddFoodModal({ meal, onClose, initialTab = 'search', initialScan
   useEffect(() => {
     if (tab !== 'search') return
     if (searchTimer.current) clearTimeout(searchTimer.current)
+    setDisplayCount(20)
     if (query.length < 2) { setResults([]); return }
     setSearching(true)
     searchTimer.current = setTimeout(async () => {
@@ -311,6 +314,18 @@ export function AddFoodModal({ meal, onClose, initialTab = 'search', initialScan
     }, 300)
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
   }, [query, tab])
+
+  // Load more results when the sentinel scrolls into view
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) setDisplayCount((c) => c + 20) },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [results])
 
   const handleBarcodeResult = async (barcode: string) => {
     setShowScanner(false)
@@ -419,7 +434,7 @@ export function AddFoodModal({ meal, onClose, initialTab = 'search', initialScan
             {searching && (
               <p className="text-center text-muted text-sm py-8">Searching…</p>
             )}
-            {!searching && results.map((item) => (
+            {!searching && results.slice(0, displayCount).map((item) => (
               <FoodRow
                 key={item.id}
                 name={item.name}
@@ -429,6 +444,11 @@ export function AddFoodModal({ meal, onClose, initialTab = 'search', initialScan
                 onFavoriteToggle={(e) => { e.stopPropagation(); toggleFavorite(item.id).catch(() => {}) }}
               />
             ))}
+            {!searching && displayCount < results.length && (
+              <div ref={sentinelRef} className="py-4 text-center text-xs text-muted">
+                Loading more…
+              </div>
+            )}
             {!searching && query.length >= 2 && results.length === 0 && (
               <div className="py-8 text-center space-y-3">
                 <p className="text-muted text-sm">No results for "{query}"</p>
