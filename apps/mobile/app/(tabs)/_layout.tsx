@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigationStore, FAB_ACTIONS } from '../../stores/navigationStore';
-import { useSessionStore } from '../../stores/sessionStore';
+import { useWorkoutStore } from '../../stores/workoutStore';
 import { useRouter } from 'expo-router';
 import { FS } from '../../constants/theme';
 import { SectionHeader } from '../../components/ui/SectionHeader';
@@ -22,7 +22,7 @@ export default function TabsLayout() {
   const [fabOpen, setFabOpen] = useState(false);
 
   const { activeSection, setSection } = useNavigationStore();
-  const { startSession } = useSessionStore();
+  const { startSession, activeSessionLocalId } = useWorkoutStore();
 
   const handleFabAction = (label: string) => {
     setFabOpen(false);

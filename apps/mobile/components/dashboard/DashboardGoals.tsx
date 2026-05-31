@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { FS } from '../../constants/theme';
 import { FSButton } from '../ui/FSButton';
 import { FSIcon } from '../ui/FSIcon';
+import { useHealthStore } from '../../stores/healthStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { formatWeight } from '../../lib/units';
 
 function SecHeader({ label }: { label: string }) {
   return (

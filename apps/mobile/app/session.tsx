@@ -7,64 +7,49 @@ import { useRouter } from 'expo-router';
 import { FS } from '../constants/theme';
 import { FSIcon } from '../components/ui/FSIcon';
 import { FSButton } from '../components/ui/FSButton';
-import { useSessionStore } from '../stores/sessionStore';
+import { useWorkoutStore } from '../stores/workoutStore';
 import { useNavigationStore } from '../stores/navigationStore';
+import type { LocalExercise, LocalSet } from '../types';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface ExSet { id: string; prev: string; w: number; r: number; done: boolean; }
-interface Exercise { id: string; name: string; muscle: string; sets: ExSet[]; }
-type FocusState = { ex: string; set: string; field: 'w' | 'r' } | null;
+// ── Focus state ───────────────────────────────────────────────────────────────
+type FocusState = { exLocalId: string; setLocalId: string; field: 'w' | 'r' } | null;
 
 // ── Numpad ────────────────────────────────────────────────────────────────────
-function Numpad({ onKey, onStep, field, onClose }: {
+function Numpad({
+  onKey, onStep, field, onClose,
+}: {
   onKey: (k: string) => void;
   onStep: (d: number) => void;
   field: 'w' | 'r';
   onClose: () => void;
 }) {
   const K = ({ children, onPress, primary }: { children: React.ReactNode; onPress: () => void; primary?: boolean }) => (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[s.key, primary && s.keyPrimary]}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity onPress={onPress} style={[s.key, primary && s.keyPrimary]} activeOpacity={0.7}>
       {typeof children === 'string'
         ? <Text style={[s.keyLabel, primary && s.keyLabelPrimary]}>{children}</Text>
         : children}
     </TouchableOpacity>
   );
-
   return (
     <View style={s.numpad}>
-      {/* Row 1 */}
       <K onPress={() => onKey('1')}>1</K>
       <K onPress={() => onKey('2')}>2</K>
       <K onPress={() => onKey('3')}>3</K>
-      <K onPress={onClose}>
-        <FSIcon name="ChevronDown" size={22} color={FS.muted} />
-      </K>
-      {/* Row 2 */}
+      <K onPress={onClose}><FSIcon name="ChevronDown" size={22} color={FS.muted} /></K>
+
       <K onPress={() => onKey('4')}>4</K>
       <K onPress={() => onKey('5')}>5</K>
       <K onPress={() => onKey('6')}>6</K>
-      <K onPress={() => onStep(1)}>
-        <Text style={s.keyLabel}>＋</Text>
-      </K>
-      {/* Row 3 */}
+      <K onPress={() => onStep(1)}><Text style={s.keyLabel}>＋</Text></K>
+
       <K onPress={() => onKey('7')}>7</K>
       <K onPress={() => onKey('8')}>8</K>
       <K onPress={() => onKey('9')}>9</K>
-      <K onPress={() => onStep(-1)}>
-        <Text style={s.keyLabel}>－</Text>
-      </K>
-      {/* Row 4 */}
-      <K onPress={() => onKey('del')}>
-        <FSIcon name="Delete" size={22} color={FS.muted} />
-      </K>
+      <K onPress={() => onStep(-1)}><Text style={s.keyLabel}>－</Text></K>
+
+      <K onPress={() => onKey('del')}><FSIcon name="Delete" size={22} color={FS.muted} /></K>
       <K onPress={() => onKey('0')}>0</K>
-      <K onPress={() => onKey('del')}>
-        <FSIcon name="Delete" size={20} color={FS.muted} />
-      </K>
+      <K onPress={() => onKey('.')}>.</K>
       <K onPress={() => onKey('next')} primary>
         <Text style={[s.keyLabel, s.keyLabelPrimary]}>{field === 'w' ? 'Next' : 'Done'}</Text>
       </K>
@@ -76,10 +61,23 @@ function Numpad({ onKey, onStep, field, onClose }: {
 export default function SessionScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { activeSession, finishSession, discardSession } = useSessionStore();
   const { setSection } = useNavigationStore();
+  const {
+    activeSessionName,
+    sessionStartedAt,
+    localExercises,
+    addSet,
+    removeSet,
+    updateSet,
+    updateExerciseNotes,
+    removeExerciseFromSession,
+    finishSession,
+    discardSession,
+  } = useWorkoutStore();
 
   const [elapsed, setElapsed] = useState(0);
+  const [focus, setFocus] = useState<FocusState>(null);
+
   useEffect(() => {
     const id = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(id);
@@ -88,80 +86,42 @@ export default function SessionScreen() {
   const fmt = (sec: number) =>
     `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
-  const [exercises, setExercises] = useState<Exercise[]>([
-    {
-      id: 'e1', name: 'Goblet Squat (Kettlebell)', muscle: 'Legs',
-      sets: [
-        { id: 's1', prev: '30 × 8', w: 30, r: 8,  done: true  },
-        { id: 's2', prev: '30 × 8', w: 30, r: 8,  done: true  },
-        { id: 's3', prev: '30 × 8', w: 30, r: 0,  done: false },
-      ],
-    },
-    {
-      id: 'e2', name: 'Bench Press (Dumbbell)', muscle: 'Chest',
-      sets: [
-        { id: 's4', prev: '45 × 10', w: 45, r: 10, done: false },
-        { id: 's5', prev: '45 × 10', w: 0,  r: 0,  done: false },
-      ],
-    },
-  ]);
-  const [focus, setFocus] = useState<FocusState>({ ex: 'e1', set: 's3', field: 'w' });
-
-  const updateSet = (exId: string, setId: string, field: 'w' | 'r', val: number) =>
-    setExercises((prev) =>
-      prev.map((e) => e.id !== exId ? e : {
-        ...e,
-        sets: e.sets.map((s) => s.id !== setId ? s : { ...s, [field]: val }),
-      })
-    );
-
-  const toggleDone = (exId: string, setId: string) =>
-    setExercises((prev) =>
-      prev.map((e) => e.id !== exId ? e : {
-        ...e,
-        sets: e.sets.map((s) => s.id !== setId ? s : { ...s, done: !s.done }),
-      })
-    );
-
-  const removeSet = (exId: string, setId: string) =>
-    setExercises((prev) =>
-      prev.map((e) => e.id !== exId ? e : {
-        ...e,
-        sets: e.sets.filter((s) => s.id !== setId),
-      })
-    );
-
-  const addSet = (exId: string) =>
-    setExercises((prev) =>
-      prev.map((e) => {
-        if (e.id !== exId) return e;
-        const last = e.sets[e.sets.length - 1];
-        const newId = 'snew_' + Date.now();
-        return {
-          ...e,
-          sets: [...e.sets, { id: newId, prev: last ? `${last.w} × ${last.r}` : '—', w: last?.w ?? 0, r: 0, done: false }],
-        };
-      })
-    );
-
-  const draft = focus
-    ? (exercises.find((e) => e.id === focus.ex)?.sets.find((s) => s.id === focus.set)?.[focus.field] ?? 0)
-    : 0;
+  const getFocusedValue = (): number => {
+    if (!focus) return 0;
+    const ex = localExercises.find((e) => e.localId === focus.exLocalId);
+    const set = ex?.sets.find((s) => s.localId === focus.setLocalId);
+    return set?.[focus.field === 'w' ? 'weightKg' : 'reps'] ?? 0;
+  };
 
   const pressKey = (key: string) => {
     if (!focus) return;
     if (key === 'next') {
-      if (focus.field === 'w') { setFocus({ ...focus, field: 'r' }); return; }
-      toggleDone(focus.ex, focus.set); setFocus(null); return;
+      if (focus.field === 'w') {
+        setFocus({ ...focus, field: 'r' });
+      } else {
+        updateSet(focus.exLocalId, focus.setLocalId, { done: true });
+        setFocus(null);
+      }
+      return;
     }
-    const cur = String(draft === 0 ? '' : draft);
+    const cur = String(getFocusedValue() === 0 ? '' : getFocusedValue());
     const next = key === 'del' ? cur.slice(0, -1) : cur + key;
-    updateSet(focus.ex, focus.set, focus.field, parseInt(next || '0', 10) || 0);
+    const val = parseFloat(next || '0') || 0;
+    if (focus.field === 'w') {
+      updateSet(focus.exLocalId, focus.setLocalId, { weightKg: val });
+    } else {
+      updateSet(focus.exLocalId, focus.setLocalId, { reps: Math.round(val) });
+    }
   };
 
   const pressStep = (dir: number) => {
     if (!focus) return;
-    updateSet(focus.ex, focus.set, focus.field, Math.max(0, (draft || 0) + dir * (focus.field === 'w' ? 5 : 1)));
+    const cur = getFocusedValue();
+    if (focus.field === 'w') {
+      updateSet(focus.exLocalId, focus.setLocalId, { weightKg: Math.max(0, cur + dir * 2.5) });
+    } else {
+      updateSet(focus.exLocalId, focus.setLocalId, { reps: Math.max(0, cur + dir) });
+    }
   };
 
   const handleFinish = () => {
@@ -176,126 +136,147 @@ export default function SessionScreen() {
       "Your progress won't be saved.",
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => { discardSession(); router.replace('/(tabs)'); } },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            discardSession();
+            router.replace('/(tabs)');
+          },
+        },
       ]
     );
   };
 
-  const Cell = ({ e, set, field }: { e: Exercise; set: ExSet; field: 'w' | 'r' }) => {
-    const on = focus?.ex === e.id && focus?.set === set.id && focus?.field === field;
+  const Cell = ({ ex, set, field }: { ex: LocalExercise; set: LocalSet; field: 'w' | 'r' }) => {
+    const on = focus?.exLocalId === ex.localId && focus?.setLocalId === set.localId && focus?.field === field;
+    const val = field === 'w' ? set.weightKg : set.reps;
     return (
       <TouchableOpacity
-        onPress={() => setFocus({ ex: e.id, set: set.id, field })}
+        onPress={() => setFocus({ exLocalId: ex.localId, setLocalId: set.localId, field })}
         style={[s.cell, on && s.cellFocused]}
         activeOpacity={0.7}
       >
-        <Text style={[s.cellText, set[field] === 0 && s.cellMuted]}>
-          {set[field] > 0 ? set[field] : 0}
-        </Text>
+        <Text style={[s.cellText, val === 0 && s.cellMuted]}>{val > 0 ? val : 0}</Text>
       </TouchableOpacity>
     );
   };
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      {/* header */}
+      {/* Header */}
       <View style={s.header}>
         <View style={s.timerBadge}>
           <FSIcon name="Timer" size={16} color={FS.muted} />
-          <Text style={s.timerText}>2:00</Text>
+          <Text style={s.timerText}>{fmt(elapsed)}</Text>
         </View>
         <View style={s.headerCenter}>
-          <Text style={s.sessionName}>{activeSession ?? 'Workout'}</Text>
-          <Text style={s.elapsed}>{fmt(elapsed)}</Text>
+          <Text style={s.sessionName}>{activeSessionName ?? 'Workout'}</Text>
+          <Text style={s.elapsed}>
+            {sessionStartedAt
+              ? new Date(sessionStartedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+              : ''}
+          </Text>
         </View>
         <FSButton variant="success" onPress={handleFinish} style={s.finishBtn}>Finish</FSButton>
       </View>
 
-      {/* exercise list */}
+      {/* Exercise list */}
       <ScrollView
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: focus ? 290 : 24 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {exercises.map((e) => (
-          <View key={e.id} style={s.exCard}>
-            {/* exercise header */}
+        {localExercises.map((ex) => (
+          <View key={ex.localId} style={s.exCard}>
+            {/* Exercise header */}
             <View style={s.exHeader}>
-              <View>
-                <Text style={s.exName}>{e.name}</Text>
-                <Text style={s.exMuscle}>{e.muscle}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.exName}>{ex.exercise.name}</Text>
+                <Text style={s.exMuscle}>{ex.exercise.muscleGroup ?? ex.exercise.equipment ?? ''}</Text>
               </View>
               <View style={s.exIcons}>
                 <TouchableOpacity style={s.iconBtn} activeOpacity={0.7}>
                   <FSIcon name="StickyNote" size={20} color={FS.muted} />
                 </TouchableOpacity>
-                <TouchableOpacity style={s.iconBtn} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={s.iconBtn}
+                  onPress={() => removeExerciseFromSession(ex.localId)}
+                  activeOpacity={0.7}
+                >
                   <FSIcon name="X" size={20} color={FS.muted} />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* column headers */}
+            {/* Column headers */}
             <View style={s.colHeaders}>
               <View style={s.colSet}><Text style={s.colLabel}>Set</Text></View>
               <View style={s.colPrev}><Text style={[s.colLabel, { textAlign: 'center' }]}>Previous</Text></View>
               <View style={s.colVal}><Text style={[s.colLabel, { textAlign: 'center' }]}>lbs</Text></View>
               <View style={s.colVal}><Text style={[s.colLabel, { textAlign: 'center' }]}>Reps</Text></View>
-              <View style={s.colCheck}>
-                <FSIcon name="Check" size={13} color={FS.muted} />
-              </View>
+              <View style={s.colCheck}><FSIcon name="Check" size={13} color={FS.muted} /></View>
               <View style={s.colRemove} />
             </View>
 
-            {/* sets */}
-            {e.sets.map((set, i) => (
-              <React.Fragment key={set.id}>
-                <View style={[s.setRow, set.done && s.setRowDone]}>
-                  <View style={s.colSet}>
-                    <View style={s.setNum}><Text style={s.setNumText}>{i + 1}</Text></View>
-                  </View>
-                  <View style={s.colPrev}>
-                    <Text style={s.prevText}>{set.prev}</Text>
-                  </View>
-                  <View style={s.colVal}><Cell e={e} set={set} field="w" /></View>
-                  <View style={s.colVal}><Cell e={e} set={set} field="r" /></View>
-                  <View style={s.colCheck}>
-                    <TouchableOpacity
-                      onPress={() => toggleDone(e.id, set.id)}
-                      style={[s.checkBtn, set.done && s.checkBtnDone]}
-                      activeOpacity={0.7}
-                    >
-                      <FSIcon name="Check" size={16} color={set.done ? '#fff' : FS.muted} />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={s.colRemove}>
-                    {i === e.sets.length - 1 && e.sets.length > 1 ? (
-                      <TouchableOpacity onPress={() => removeSet(e.id, set.id)} style={s.removeBtn} activeOpacity={0.7}>
-                        <FSIcon name="X" size={15} color={FS.muted} />
+            {/* Sets */}
+            {ex.sets.map((set, i) => {
+              const lastSet = ex.lastSets[i];
+              const prevLabel = lastSet ? `${lastSet.weightKg} × ${lastSet.reps}` : '—';
+              return (
+                <React.Fragment key={set.localId}>
+                  <View style={[s.setRow, set.done && s.setRowDone]}>
+                    <View style={s.colSet}>
+                      <View style={s.setNum}><Text style={s.setNumText}>{i + 1}</Text></View>
+                    </View>
+                    <View style={s.colPrev}>
+                      <Text style={s.prevText}>{prevLabel}</Text>
+                    </View>
+                    <View style={s.colVal}><Cell ex={ex} set={set} field="w" /></View>
+                    <View style={s.colVal}><Cell ex={ex} set={set} field="r" /></View>
+                    <View style={s.colCheck}>
+                      <TouchableOpacity
+                        onPress={() => updateSet(ex.localId, set.localId, { done: !set.done })}
+                        style={[s.checkBtn, set.done && s.checkBtnDone]}
+                        activeOpacity={0.7}
+                      >
+                        <FSIcon name="Check" size={16} color={set.done ? '#fff' : FS.muted} />
                       </TouchableOpacity>
-                    ) : <View />}
+                    </View>
+                    <View style={s.colRemove}>
+                      {i === ex.sets.length - 1 && ex.sets.length > 1 ? (
+                        <TouchableOpacity
+                          onPress={() => removeSet(ex.localId, set.localId)}
+                          style={s.removeBtn}
+                          activeOpacity={0.7}
+                        >
+                          <FSIcon name="X" size={15} color={FS.muted} />
+                        </TouchableOpacity>
+                      ) : <View />}
+                    </View>
                   </View>
-                </View>
-                {/* rest timer divider */}
-                <View style={s.restDivider}>
-                  <View style={s.restLineLeft} />
-                  <Text style={s.restLabel}>2:00</Text>
-                  <View style={s.restLineRight} />
-                </View>
-              </React.Fragment>
-            ))}
+                  {/* Rest divider (only between sets, not after last) */}
+                  {i < ex.sets.length - 1 && (
+                    <View style={s.restDivider}>
+                      <View style={s.restLineLeft} />
+                      <Text style={s.restLabel}>{Math.floor(ex.restSeconds / 60)}:{String(ex.restSeconds % 60).padStart(2, '0')}</Text>
+                      <View style={s.restLineRight} />
+                    </View>
+                  )}
+                </React.Fragment>
+              );
+            })}
 
-            {/* add set button */}
-            <TouchableOpacity onPress={() => addSet(e.id)} style={s.addSetBtn} activeOpacity={0.7}>
+            {/* Add set */}
+            <TouchableOpacity onPress={() => addSet(ex.localId)} style={s.addSetBtn} activeOpacity={0.7}>
               <FSIcon name="Plus" size={16} color={FS.text} />
-              <Text style={s.addSetText}>Add Set </Text>
-              <Text style={s.addSetTime}>(2:00)</Text>
+              <Text style={s.addSetText}>Add Set</Text>
             </TouchableOpacity>
           </View>
         ))}
 
-        {/* add exercise */}
+        {/* Add exercise (placeholder — exercise picker to be wired) */}
         <TouchableOpacity style={s.addExBtn} activeOpacity={0.7}>
           <FSIcon name="Plus" size={16} color={FS.muted} />
           <Text style={s.addExText}>Add Exercise</Text>
@@ -306,7 +287,7 @@ export default function SessionScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* numpad */}
+      {/* Numpad */}
       {focus && (
         <Numpad
           onKey={pressKey}
@@ -323,10 +304,10 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: FS.bg },
   header: { backgroundColor: FS.surface, borderBottomWidth: 1, borderBottomColor: FS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, paddingHorizontal: 16 },
   timerBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: FS.surfaceHigh, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  timerText: { fontSize: 13, color: FS.muted },
+  timerText: { fontSize: 13, color: FS.muted, fontVariant: ['tabular-nums'] as any },
   headerCenter: { alignItems: 'center' },
   sessionName: { fontSize: 16, fontWeight: '700', color: FS.text },
-  elapsed: { fontSize: 12, color: FS.muted, fontVariant: ['tabular-nums'] as any },
+  elapsed: { fontSize: 12, color: FS.muted },
   finishBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 12 },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 12 },
@@ -361,7 +342,6 @@ const s = StyleSheet.create({
   restLineRight: { flex: 1, height: 2, borderRadius: 2, backgroundColor: FS.primary, opacity: 0.18 },
   addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', margin: 4, marginHorizontal: 8, marginBottom: 8, backgroundColor: FS.surfaceHigh, borderRadius: 10, paddingVertical: 11, gap: 6 },
   addSetText: { fontSize: 14, fontWeight: '600', color: FS.text },
-  addSetTime: { fontSize: 14, color: FS.muted, fontWeight: '400' },
   addExBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed', borderColor: FS.border, borderRadius: 16, padding: 16, gap: 4 },
   addExText: { fontSize: 14, color: FS.muted },
   discardBtn: { alignItems: 'center', padding: 8 },

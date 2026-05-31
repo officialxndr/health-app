@@ -23,7 +23,7 @@ export default function FoodScreen() {
       case 'recipes': return <FoodRecipesView openSheet={() => setSheet(true)} />;
       case 'trends':  return <FoodTrendsView />;
       case 'goals':   return <FoodGoalsView />;
-      default:        return <FoodTodayView openSheet={() => setSheet(true)} />;
+      default:        return <FoodTodayView />;
     }
   };
 

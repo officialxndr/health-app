@@ -1,24 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { FS } from '../../constants/theme';
 import { FSButton } from '../ui/FSButton';
 import { FSIcon } from '../ui/FSIcon';
-import { useSessionStore, Routine } from '../../stores/sessionStore';
+import { useWorkoutStore } from '../../stores/workoutStore';
+import { useRoutinesStore, Routine } from '../../stores/routinesStore';
 import { useRouter } from 'expo-router';
-
-const TEMPLATE_DEFS = [
-  { id: 'push',  name: 'Push Day',   muscles: 'Chest · Shoulders · Triceps' },
-  { id: 'pull',  name: 'Pull Day',   muscles: 'Back · Biceps'               },
-  { id: 'legs',  name: 'Leg Day',    muscles: 'Quads · Hamstrings · Glutes' },
-  { id: 'upper', name: 'Upper Body', muscles: 'Chest · Back · Arms'         },
-];
-
-const TEMPLATES = [
-  { name: 'Push Day',   muscles: 'Chest · Shoulders · Triceps', last: '2 days ago' },
-  { name: 'Pull Day',   muscles: 'Back · Biceps',               last: '4 days ago' },
-  { name: 'Leg Day',    muscles: 'Quads · Hamstrings · Glutes', last: '6 days ago' },
-  { name: 'Upper Body', muscles: 'Chest · Back · Arms',         last: 'Never'      },
-];
 
 function fmtAge(ts: number | undefined) {
   if (!ts) return 'Never';
@@ -28,38 +15,47 @@ function fmtAge(ts: number | undefined) {
   return `${days}d ago`;
 }
 
-function getNext(routine: Routine) {
-  if (!routine.templateIds.length) return null;
-  let nextId = routine.templateIds[0];
-  let nextTime = routine.lastDones[nextId] || 0;
-  for (const id of routine.templateIds) {
-    const t = routine.lastDones[id] || 0;
-    if (t < nextTime) { nextId = id; nextTime = t; }
-  }
-  return TEMPLATE_DEFS.find((t) => t.id === nextId) ?? null;
-}
-
 export function WorkoutLibraryView() {
   const router = useRouter();
-  const { routines, addRoutine, deleteRoutine, stampRoutine, startSession } = useSessionStore();
+  const { templates, loadTemplates, startSession } = useWorkoutStore();
+  const { routines, addRoutine, deleteRoutine, stampRoutine } = useRoutinesStore();
+
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
 
+  useEffect(() => { loadTemplates(); }, []);
+
   const toggle = (id: string) =>
     setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
 
-  const create = () => {
+  const createRoutine = () => {
     if (!newName.trim() || !selected.length) return;
     addRoutine({ id: 'r' + Date.now(), name: newName.trim(), templateIds: [...selected], lastDones: {} });
     setNewName(''); setSelected([]); setShowCreate(false);
   };
 
+  const getNextTemplate = (r: Routine) => {
+    if (!r.templateIds.length) return null;
+    let nextId = r.templateIds[0];
+    let nextTime = r.lastDones[nextId] || 0;
+    for (const id of r.templateIds) {
+      const t = r.lastDones[id] || 0;
+      if (t < nextTime) { nextId = id; nextTime = t; }
+    }
+    return templates.find((t) => t.id === nextId) ?? null;
+  };
+
   const startRoutine = (r: Routine) => {
-    const next = getNext(r);
-    if (!next) return;
+    const next = getNextTemplate(r);
+    if (!next) {
+      // No templates loaded yet — just start a quick workout
+      startSession(r.name);
+      router.push('/session');
+      return;
+    }
     stampRoutine(r.id, next.id);
-    startSession(next.name);
+    startSession(next.name, next.id);
     router.push('/session');
   };
 
@@ -87,8 +83,8 @@ export function WorkoutLibraryView() {
           />
           <Text style={s.pickHint}>SELECT TEMPLATES · TAP TO SET ORDER</Text>
           <View style={{ gap: 6 }}>
-            {TEMPLATE_DEFS.map((t) => {
-              const on  = selected.includes(t.id);
+            {templates.map((t) => {
+              const on = selected.includes(t.id);
               const pos = selected.indexOf(t.id) + 1;
               return (
                 <TouchableOpacity key={t.id} onPress={() => toggle(t.id)}
@@ -99,24 +95,25 @@ export function WorkoutLibraryView() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.pickName}>{t.name}</Text>
-                    <Text style={s.pickMuscles}>{t.muscles}</Text>
+                    <Text style={s.pickMuscles}>
+                      {t.exercises.map((e) => e.exercise.muscleGroup).filter(Boolean).slice(0, 3).join(' · ') || `${t.exercises.length} exercises`}
+                    </Text>
                   </View>
                 </TouchableOpacity>
               );
             })}
+            {templates.length === 0 && <Text style={s.pickMuscles}>No templates yet — create some first.</Text>}
           </View>
           <View style={s.createActions}>
             <FSButton variant="neutral" onPress={() => { setShowCreate(false); setNewName(''); setSelected([]); }} style={{ flex: 1, borderRadius: 12 }}>Cancel</FSButton>
-            <FSButton onPress={create} disabled={!newName.trim() || !selected.length} style={{ flex: 1, borderRadius: 12 }}>Create</FSButton>
+            <FSButton onPress={createRoutine} disabled={!newName.trim() || !selected.length} style={{ flex: 1, borderRadius: 12 }}>Create</FSButton>
           </View>
         </View>
       )}
 
       {!showCreate && routines.length === 0 && (
         <TouchableOpacity onPress={() => setShowCreate(true)} style={s.emptyCard} activeOpacity={0.7}>
-          <View style={s.emptyIcon}>
-            <FSIcon name="Repeat" size={18} color={FS.primary} />
-          </View>
+          <View style={s.emptyIcon}><FSIcon name="Repeat" size={18} color={FS.primary} /></View>
           <View style={{ flex: 1 }}>
             <Text style={s.emptyTitle}>Create a routine</Text>
             <Text style={s.emptySub}>Auto-rotate through your templates</Text>
@@ -126,7 +123,7 @@ export function WorkoutLibraryView() {
       )}
 
       {routines.map((r) => {
-        const next = getNext(r);
+        const next = getNextTemplate(r);
         return (
           <View key={r.id} style={s.routineCard}>
             <View style={s.routineHead}>
@@ -153,34 +150,43 @@ export function WorkoutLibraryView() {
         );
       })}
 
-      {/* ── Divider ── */}
-      <View style={s.divider} />
-
       {/* ── Templates ── */}
+      <View style={s.divider} />
       <View style={s.sectionHead}>
         <Text style={s.sectionTitle}>Templates</Text>
-        <Text style={s.newLink}>+ New</Text>
       </View>
+
       <FSButton full onPress={() => { startSession('Quick Workout'); router.push('/session'); }} style={s.quickStart}>
         Quick Start
       </FSButton>
-      <View style={s.templateGrid}>
-        {TEMPLATES.map((t, i) => (
-          <TouchableOpacity key={i}
-            onPress={() => { startSession(t.name); router.push('/session'); }}
-            style={s.templateCard} activeOpacity={0.7}>
-            <View style={s.templateTop}>
-              <Text style={s.templateName}>{t.name}</Text>
-              <FSIcon name="MoreHorizontal" size={20} color={FS.muted} />
-            </View>
-            <Text style={s.templateMuscles}>{t.muscles}</Text>
-            <View style={s.templateLast}>
-              <FSIcon name="Clock" size={14} color={FS.muted} />
-              <Text style={s.templateLastText}>Last {t.last}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
+
+      {templates.length === 0 ? (
+        <View style={s.emptyCard}>
+          <Text style={s.emptySub}>No templates yet. Quick start a workout to begin, or create a template.</Text>
+        </View>
+      ) : (
+        <View style={s.templateGrid}>
+          {templates.map((t) => (
+            <TouchableOpacity key={t.id}
+              onPress={() => { startSession(t.name, t.id); router.push('/session'); }}
+              style={s.templateCard} activeOpacity={0.7}>
+              <View style={s.templateTop}>
+                <Text style={s.templateName}>{t.name}</Text>
+                <FSIcon name="MoreHorizontal" size={20} color={FS.muted} />
+              </View>
+              <Text style={s.templateMuscles}>
+                {t.exercises.map((e) => e.exercise.muscleGroup).filter(Boolean).slice(0, 3).join(' · ') || `${t.exercises.length} exercises`}
+              </Text>
+              <View style={s.templateLast}>
+                <FSIcon name="Clock" size={14} color={FS.muted} />
+                <Text style={s.templateLastText}>
+                  {t.lastPerformedAt ? `Last ${new Date(t.lastPerformedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'Never performed'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -222,7 +228,7 @@ const s = StyleSheet.create({
   templateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   templateCard: { width: '47%', backgroundColor: FS.surface, borderRadius: 16, padding: 16, gap: 8, minHeight: 120 },
   templateTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  templateName: { fontSize: 16, fontWeight: '600', color: FS.text, lineHeight: 20 },
+  templateName: { fontSize: 16, fontWeight: '600', color: FS.text, lineHeight: 20, flex: 1 },
   templateMuscles: { fontSize: 12, color: FS.muted },
   templateLast: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 'auto' as any },
   templateLastText: { fontSize: 12, color: FS.muted },

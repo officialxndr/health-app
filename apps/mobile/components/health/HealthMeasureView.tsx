@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { FS } from '../../constants/theme';
 import { FSButton } from '../ui/FSButton';
+import { useHealthStore } from '../../stores/healthStore';
 
 const MEASUREMENTS = [
   { name: 'Waist',       current: 33.5, prev: '34.2 in', delta: '−0.7', good: true  },
