@@ -1,0 +1,6 @@
+module Pods_FitSelf {
+  umbrella header "Pods-FitSelf-umbrella.h"
+
+  export *
+  module * { export * }
+}
