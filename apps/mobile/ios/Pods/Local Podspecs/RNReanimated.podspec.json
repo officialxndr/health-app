@@ -21,26 +21,23 @@
   "pod_target_xcconfig": {
     "USE_HEADERMAP": "YES",
     "DEFINES_MODULE": "YES",
-    "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/ReactCommon\" \"$(PODS_TARGET_SRCROOT)\" \"$(PODS_ROOT)/RCT-Folly\" \"$(PODS_ROOT)/boost\" \"$(PODS_ROOT)/boost-for-react-native\" \"$(PODS_ROOT)/DoubleConversion\" \"$(PODS_ROOT)/Headers/Private/React-Core\" \"$(PODS_ROOT)/Headers/Private/Yoga\" \"$(PODS_ROOT)/boost\" \"$(PODS_ROOT)/Headers/Private/Yoga\"",
+    "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/ReactCommon\" \"$(PODS_TARGET_SRCROOT)\" \"$(PODS_ROOT)/RCT-Folly\" \"$(PODS_ROOT)/boost\" \"$(PODS_ROOT)/boost-for-react-native\" \"$(PODS_ROOT)/DoubleConversion\" \"$(PODS_ROOT)/Headers/Private/React-Core\" \"$(PODS_ROOT)/Headers/Private/Yoga\" \"$(PODS_ROOT)/Headers/Private/Yoga\"",
     "FRAMEWORK_SEARCH_PATHS": "\"${PODS_CONFIGURATION_BUILD_DIR}/React-hermes\"",
     "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
     "GCC_PREPROCESSOR_DEFINITIONS[config=Debug]": "$(inherited) HERMES_ENABLE_DEBUGGER=1",
     "GCC_PREPROCESSOR_DEFINITIONS[config=Release]": "$(inherited) NDEBUG=1",
-    "OTHER_CPLUSPLUSFLAGS": "$(inherited) -DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_CFG_NO_COROUTINES=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -Wno-comma -Wno-shorten-64-to-32"
+    "OTHER_CPLUSPLUSFLAGS": "$(inherited) -DRCT_NEW_ARCH_ENABLED=1 ",
+    "OTHER_SWIFT_FLAGS": "$(inherited) -DRCT_NEW_ARCH_ENABLED"
   },
-  "compiler_flags": "-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -Wno-comma -Wno-shorten-64-to-32 -DREACT_NATIVE_MINOR_VERSION=76 -Wno-comma -Wno-shorten-64-to-32 -Wno-documentation  -DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_CFG_NO_COROUTINES=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -Wno-comma -Wno-shorten-64-to-32",
+  "compiler_flags": "-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -Wno-comma -Wno-shorten-64-to-32 -DREACT_NATIVE_MINOR_VERSION=81 -Wno-comma -Wno-shorten-64-to-32 -Wno-documentation  -DRCT_NEW_ARCH_ENABLED=1",
   "xcconfig": {
-    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/boost\" \"$(PODS_ROOT)/boost-for-react-native\" \"$(PODS_ROOT)/glog\" \"$(PODS_ROOT)/RCT-Folly\" \"$(PODS_ROOT)/Headers/Public/React-hermes\" \"$(PODS_ROOT)/Headers/Public/hermes-engine\" \"$(PODS_ROOT)/../../../../node_modules/react-native/ReactCommon\" \"$(PODS_ROOT)/../../../../node_modules/react-native-reanimated/apple\" \"$(PODS_ROOT)/../../../../node_modules/react-native-reanimated/Common/cpp\"",
-    "OTHER_CFLAGS": "$(inherited) -DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -Wno-comma -Wno-shorten-64-to-32 -DREACT_NATIVE_MINOR_VERSION=76   -DREANIMATED_VERSION=3.16.7  "
+    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/boost\" \"$(PODS_ROOT)/boost-for-react-native\" \"$(PODS_ROOT)/glog\" \"$(PODS_ROOT)/RCT-Folly\" \"$(PODS_ROOT)/Headers/Public/React-hermes\" \"$(PODS_ROOT)/Headers/Public/hermes-engine\" \"$(PODS_ROOT)/../../../../node_modules/react-native/ReactCommon\" \"$(PODS_ROOT)/../../node_modules/react-native-reanimated/apple\" \"$(PODS_ROOT)/../../node_modules/react-native-reanimated/Common/cpp\"",
+    "OTHER_CFLAGS": "$(inherited) -DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -Wno-comma -Wno-shorten-64-to-32 -DREACT_NATIVE_MINOR_VERSION=81 -DRCT_NEW_ARCH_ENABLED  -DREANIMATED_VERSION=3.16.7  "
   },
   "requires_arc": true,
   "dependencies": {
     "ReactCommon/turbomodule/core": [],
     "React-Core": [],
-    "RCT-Folly": [
-      "2024.10.14.00"
-    ],
-    "glog": [],
     "React-RCTFabric": [],
     "ReactCodegen": [],
     "RCTRequired": [],
@@ -55,8 +52,11 @@
     "React-debug": [],
     "React-ImageManager": [],
     "React-rendererdebug": [],
-    "DoubleConversion": [],
-    "hermes-engine": []
+    "React-jsi": [],
+    "React-renderercss": [],
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
   },
   "subspecs": [
     {

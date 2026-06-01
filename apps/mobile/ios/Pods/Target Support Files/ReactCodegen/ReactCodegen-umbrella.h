@@ -10,9 +10,10 @@
 #endif
 #endif
 
-#import "FBReactNativeSpec/FBReactNativeSpec.h"
-#import "FBReactNativeSpecJSI.h"
+#import "RCTModuleProviders.h"
 #import "RCTModulesConformingToProtocolsProvider.h"
+#import "RCTThirdPartyComponentsProvider.h"
+#import "RCTUnstableModulesRequiringMainQueueSetupProvider.h"
 #import "react/renderer/components/rngesturehandler_codegen/ComponentDescriptors.h"
 #import "react/renderer/components/rngesturehandler_codegen/EventEmitters.h"
 #import "react/renderer/components/rngesturehandler_codegen/Props.h"
@@ -47,6 +48,8 @@
 #import "rnscreensJSI.h"
 #import "rnsvg/rnsvg.h"
 #import "rnsvgJSI.h"
+#import "rnworklets/rnworklets.h"
+#import "rnworkletsJSI.h"
 #import "safeareacontext/safeareacontext.h"
 #import "safeareacontextJSI.h"
 

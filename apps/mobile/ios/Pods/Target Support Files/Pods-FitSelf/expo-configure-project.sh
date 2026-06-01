@@ -43,9 +43,11 @@ NODE_NOT_FOUND
 
 with_node \
   --no-warnings \
-  --eval "require(require.resolve('expo-modules-autolinking', { paths: [require.resolve('expo/package.json')] }))(process.argv.slice(1))" \
+  --eval "require('expo/bin/autolinking')" \
+  expo-modules-autolinking \
   generate-modules-provider  \
   --target "/Users/xndr/Documents/coding-projects/health-app/apps/mobile/ios/Pods/Target Support Files/Pods-FitSelf/ExpoModulesProvider.swift" \
+  --entitlement "/Users/xndr/Documents/coding-projects/health-app/apps/mobile/ios/FitSelf/FitSelf.entitlements" \
    \
   --platform "apple" \
-  --packages "expo" "expo-asset" "expo-constants" "expo-file-system" "expo-font" "expo-haptics" "expo-keep-awake" "expo-linking" "expo-router" "expo-splash-screen"
+  --packages "expo" "expo-asset" "expo-constants" "expo-crypto" "expo-file-system" "expo-font" "expo-haptics" "expo-keep-awake" "expo-linking" "expo-router" "expo-splash-screen" "expo-sqlite"

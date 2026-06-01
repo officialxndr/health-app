@@ -4,11 +4,6 @@
 <dict>
 	<key>SchemeUserState</key>
 	<dict>
-		<key>DoubleConversion.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
 		<key>EXConstants-EXConstants.xcscheme</key>
 		<dict>
 			<key>isShown</key>
@@ -30,6 +25,11 @@
 			<false/>
 		</dict>
 		<key>ExpoAsset.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
+		<key>ExpoCrypto.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>
@@ -74,6 +74,11 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
+		<key>ExpoSQLite.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
 		<key>ExpoSplashScreen.xcscheme</key>
 		<dict>
 			<key>isShown</key>
@@ -85,16 +90,6 @@
 			<false/>
 		</dict>
 		<key>Pods-FitSelf.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
-		<key>RCT-Folly-RCT-Folly_privacy.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
-		<key>RCT-Folly.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>
@@ -134,6 +129,11 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
+		<key>RNSVG-RNSVGFilters.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
 		<key>RNSVG.xcscheme</key>
 		<dict>
 			<key>isShown</key>
@@ -144,7 +144,17 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
+		<key>RNWorklets.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
 		<key>React-Core-React-Core_privacy.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
+		<key>React-Core-prebuilt.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>
@@ -209,6 +219,11 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
+		<key>React-RCTFBReactNativeSpec.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
 		<key>React-RCTFabric.xcscheme</key>
 		<dict>
 			<key>isShown</key>
@@ -225,6 +240,11 @@
 			<false/>
 		</dict>
 		<key>React-RCTNetwork.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
+		<key>React-RCTRuntime.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>
@@ -334,6 +354,26 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
+		<key>React-jsinspectorcdp.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
+		<key>React-jsinspectornetwork.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
+		<key>React-jsinspectortracing.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
+		<key>React-jsitooling.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
 		<key>React-jsitracing.xcscheme</key>
 		<dict>
 			<key>isShown</key>
@@ -349,7 +389,7 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
-		<key>React-nativeconfig.xcscheme</key>
+		<key>React-oscompat.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>
@@ -369,12 +409,12 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
-		<key>React-rendererdebug.xcscheme</key>
+		<key>React-renderercss.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>
 		</dict>
-		<key>React-rncore.xcscheme</key>
+		<key>React-rendererdebug.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>
@@ -404,6 +444,11 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
+		<key>ReactAppDependencyProvider.xcscheme</key>
+		<dict>
+			<key>isShown</key>
+			<false/>
+		</dict>
 		<key>ReactCodegen.xcscheme</key>
 		<dict>
 			<key>isShown</key>
@@ -414,42 +459,12 @@
 			<key>isShown</key>
 			<false/>
 		</dict>
-		<key>SocketRocket.xcscheme</key>
+		<key>ReactNativeDependencies.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>
 		</dict>
 		<key>Yoga.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
-		<key>boost-boost_privacy.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
-		<key>boost.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
-		<key>fast_float.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
-		<key>fmt.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
-		<key>glog-glog_privacy.xcscheme</key>
-		<dict>
-			<key>isShown</key>
-			<false/>
-		</dict>
-		<key>glog.xcscheme</key>
 		<dict>
 			<key>isShown</key>
 			<false/>

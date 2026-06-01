@@ -1,6 +1,6 @@
 {
   "name": "React-graphics",
-  "version": "0.76.9",
+  "version": "0.81.5",
   "summary": "Fabric for React Native.",
   "homepage": "https://reactnative.dev/",
   "license": "MIT",
@@ -10,33 +10,26 @@
   },
   "source": {
     "git": "https://github.com/facebook/react-native.git",
-    "tag": "v0.76.9"
+    "tag": "v0.81.5"
   },
-  "compiler_flags": "-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_CFG_NO_COROUTINES=1 -DFOLLY_HAVE_CLOCK_GETTIME=1 -Wno-comma -Wno-shorten-64-to-32 -Wno-documentation",
-  "source_files": "**/*.{m,mm,cpp,h}",
-  "header_dir": "react/renderer/graphics",
-  "exclude_files": [
-    "tests",
-    "platform/android",
-    "platform/cxx",
-    "platform/windows",
-    "react/renderer/graphics"
+  "source_files": [
+    "*.h",
+    "platform/ios/**/*.h"
   ],
+  "header_dir": "react/renderer/graphics",
   "frameworks": "UIKit",
   "pod_target_xcconfig": {
     "USE_HEADERMAP": "NO",
-    "HEADER_SEARCH_PATHS": "\"$(PODS_ROOT)/boost\" \"$(PODS_TARGET_SRCROOT)/../../../\" \"$(PODS_ROOT)/RCT-Folly\" \"$(PODS_ROOT)/DoubleConversion\" \"$(PODS_ROOT)/fast_float/include\" \"$(PODS_ROOT)/fmt/include\"",
+    "HEADER_SEARCH_PATHS": "\"$(PODS_TARGET_SRCROOT)/../../../\"",
     "DEFINES_MODULE": "YES",
     "CLANG_CXX_LANGUAGE_STANDARD": "c++20"
   },
   "dependencies": {
-    "glog": [],
-    "RCT-Folly/Fabric": [],
     "React-jsi": [],
     "React-jsiexecutor": [],
     "React-utils": [],
-    "DoubleConversion": [],
-    "fast_float": [],
-    "fmt": []
+    "hermes-engine": [],
+    "ReactNativeDependencies": [],
+    "React-Core-prebuilt": []
   }
 }

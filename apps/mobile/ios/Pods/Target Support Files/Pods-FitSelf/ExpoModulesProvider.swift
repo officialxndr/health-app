@@ -9,6 +9,7 @@ import ExpoModulesCore
 import Expo
 import ExpoAsset
 import EXConstants
+import ExpoCrypto
 import ExpoFileSystem
 import ExpoFont
 import ExpoHaptics
@@ -16,6 +17,7 @@ import ExpoKeepAwake
 import ExpoLinking
 import ExpoHead
 import ExpoSplashScreen
+import ExpoSQLite
 
 @objc(ExpoModulesProvider)
 public class ExpoModulesProvider: ModulesProvider {
@@ -24,14 +26,18 @@ public class ExpoModulesProvider: ModulesProvider {
       ExpoFetchModule.self,
       AssetModule.self,
       ConstantsModule.self,
+      CryptoModule.self,
       FileSystemModule.self,
-      FileSystemNextModule.self,
+      FileSystemLegacyModule.self,
       FontLoaderModule.self,
+      FontUtilsModule.self,
       HapticsModule.self,
       KeepAwakeModule.self,
       ExpoLinkingModule.self,
       ExpoHeadModule.self,
-      SplashScreenModule.self
+      LinkPreviewNativeModule.self,
+      SplashScreenModule.self,
+      SQLiteModule.self
     ]
   }
 
